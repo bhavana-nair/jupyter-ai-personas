@@ -201,33 +201,27 @@ class PRReviewPersona(BasePersona):
         team = self.initialize_team(system_prompt)
         
         try:
-            response = team.run(message.body, 
-                              stream=False,
-                              stream_intermediate_steps=True,
-                              show_full_reasoning=True)
-
-            response = response.content
+            response = await team.run(message.body, 
+                                    stream=False,
+                                    stream_intermediate_steps=True,
+                                    show_full_reasoning=True)
+            
             async def response_iterator():
                 yield response
             
             await self.stream_message(response_iterator())
-            
-            # self._cleanup_temp_files()
         except ValueError as e:
             error_message = f"Configuration Error: {str(e)}\nThis may be due to missing or invalid environment variables, model configuration, or input parameters."
             async def error_iterator():
                 yield error_message
             await self.stream_message(error_iterator())
-            self._cleanup_temp_files() 
         except boto3.exceptions.Boto3Error as e:
             error_message = f"AWS Connection Error: {str(e)}\nThis may be due to invalid AWS credentials or network connectivity issues."
             async def error_iterator():
                 yield error_message
             await self.stream_message(error_iterator())
-            self._cleanup_temp_files() 
         except Exception as e:
             error_message = f"PR Review Error ({type(e).__name__}): {str(e)}\nAn unexpected error occurred while the PR review team was analyzing your request."
             async def error_iterator():
                 yield error_message
             await self.stream_message(error_iterator())
-            self._cleanup_temp_files()  

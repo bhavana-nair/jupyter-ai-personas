@@ -3,7 +3,7 @@ import json
 from agno.tools import Toolkit
 from agno.utils.log import logger
 import re
-from github import Github
+from github import Github, Auth
 import requests
 from agno.agent import Agent
 
@@ -18,7 +18,7 @@ class CITools(Toolkit):
             self.get_ci_logs
         ],  **kwargs)
 
-    def fetch_ci_failure_data(self, agent: Agent,  repo_url: str, pr_number: int) -> list:
+    async def fetch_ci_failure_data(self, agent: Agent,  repo_url: str, pr_number: int) -> list:
         """
         Fetch CI Failure data from GitHub API and store it in the agent's session state.
         
@@ -31,16 +31,15 @@ class CITools(Toolkit):
             list: List of failure data containing job name, id and log information
         """
 
-        if "github.com" in repo_url:
-            match = re.search(r"github\.com/([^/]+)/([^/]+)", repo_url)
-            
+        match = re.search(r"github\.com/([^/]+)/([^/]+)", repo_url)
         if not match:
             raise ValueError("Invalid GitHub URL format. Expected either github.com/owner/repo or api.github.com/repos/owner/repo")
 
         owner, repo_name = match.groups()
         repo_name = f"{owner}/{repo_name}"
 
-        g = Github(os.getenv("GITHUB_ACCESS_TOKEN"))
+        auth = Auth.Token(self.github_token)
+        g = Github(auth=auth)
         repo = g.get_repo(repo_name)
         pr_data = repo.get_pull(pr_number)
 
@@ -104,7 +103,7 @@ class CITools(Toolkit):
         print(f"Found {len(failures)} failed jobs")
         return failures
 
-    def get_ci_logs(self, agent: Agent, job_name: str = None) -> list:
+    async def get_ci_logs(self, agent: Agent, job_name: str = None) -> list:
         """
         Retrieve CI failure logs from agent's session state.
         
