@@ -9,11 +9,11 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
-    timeout-minutes: 10  # Add timeout to prevent hanging jobs
+    timeout-minutes: 10  
     strategy:
       matrix:
-        python-version: [3.9, 3.10]
-      fail-fast: false  # Continue with other versions if one fails
+        python-version: ["3.9", "3.10"]
+      fail-fast: false  
 
     steps:
     - uses: actions/checkout@v3
