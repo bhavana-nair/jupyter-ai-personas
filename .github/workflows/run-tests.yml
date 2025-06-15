@@ -9,9 +9,11 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 10  # Add timeout to prevent hanging jobs
     strategy:
       matrix:
         python-version: [3.9, 3.10]
+      fail-fast: false  # Continue with other versions if one fails
 
     steps:
     - uses: actions/checkout@v3
@@ -27,8 +29,18 @@ jobs:
         pip install pytest pytest-asyncio
         pip install -e ".[pr_review]"
         
+    - name: Create conftest.py to patch problematic methods
+      run: |
+        mkdir -p jupyter_ai_personas/pr_review_persona
+        echo 'import pytest' > jupyter_ai_personas/pr_review_persona/conftest.py
+        echo 'from unittest.mock import patch' >> jupyter_ai_personas/pr_review_persona/conftest.py
+        echo '@pytest.fixture(autouse=True, scope="session")' >> jupyter_ai_personas/pr_review_persona/conftest.py
+        echo 'def patch_persona_awareness():' >> jupyter_ai_personas/pr_review_persona/conftest.py
+        echo '    with patch("jupyter_ai.personas.persona_awareness.PersonaAwareness._start_heartbeat", return_value=None):' >> jupyter_ai_personas/pr_review_persona/conftest.py
+        echo '        yield' >> jupyter_ai_personas/pr_review_persona/conftest.py
+        
     - name: Run tests
       run: |
-        pytest jupyter_ai_personas/pr_review_persona/test_*.py -v
+        pytest jupyter_ai_personas/pr_review_persona/test_*.py -v --log-cli-level=INFO
       env:
         GITHUB_ACCESS_TOKEN: ${{ secrets.GITHUB_TOKEN }}
