@@ -36,6 +36,6 @@ jobs:
         
     - name: Run tests
       run: |
-        python -m pytest jupyter_ai_personas/tests/ -v
+        python -m pytest tests/ -v
       env:
         GITHUB_ACCESS_TOKEN: ${{ secrets.GITHUB_TOKEN }}
