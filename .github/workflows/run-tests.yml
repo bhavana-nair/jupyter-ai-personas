@@ -12,7 +12,7 @@ jobs:
     timeout-minutes: 10  
     strategy:
       matrix:
-        python-version: ["3.9", "3.10"]
+        python-version: ["3.11", "3.10",  "3.12"]
       fail-fast: false  
 
     steps:
@@ -29,13 +29,13 @@ jobs:
         pip install pytest pytest-asyncio
         pip install -e ".[all]"
         
-    - name: List test directory
+    - name: List test directories
       run: |
-        ls -la test/
-        cat test/conftest.py
+        ls -la tests/
+        cat tests/conftest.py
         
     - name: Run tests
       run: |
-        python -m pytest jupyter_ai_personas/pr_review_persona/test/test_*.py -v
+        python -m pytest jupyter_ai_personas/tests/ -v
       env:
         GITHUB_ACCESS_TOKEN: ${{ secrets.GITHUB_TOKEN }}
