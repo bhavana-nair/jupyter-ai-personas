@@ -31,8 +31,6 @@ jobs:
         
     - name: Run tests
       run: |
-        # Find and run the test file directly
-        TEST_FILE=$(find . -name "test_persona.py")
-        python -m pytest "$TEST_FILE" -v
+        python -m pytest jupyter_ai_personas/tests/ -v
       env:
         GITHUB_ACCESS_TOKEN: ${{ secrets.GITHUB_TOKEN }}
