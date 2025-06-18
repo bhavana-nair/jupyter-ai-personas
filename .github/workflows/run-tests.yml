@@ -29,22 +29,6 @@ jobs:
         pip install pytest pytest-asyncio pytest-tornado
         pip install -e ".[pr_review]"
         
-    - name: Modify test file to remove event_loop dependency
-      run: |
-        # Find the test file
-        TEST_FILE=$(find . -name "test_persona.py")
-        echo "Found test file at: $TEST_FILE"
-        
-        # Make a backup
-        cp "$TEST_FILE" "${TEST_FILE}.bak"
-        
-        # Replace the fixture definition to remove event_loop dependency
-        sed -i 's/@pytest.fixture\nasync def pr_persona(event_loop):/@pytest.fixture\nasync def pr_persona():/' "$TEST_FILE"
-        
-        # Show the changes
-        echo "Changes made to test file:"
-        diff "${TEST_FILE}.bak" "$TEST_FILE" || echo "Changes applied"
-        
     - name: Run tests
       run: |
         # Find and run the test file directly
