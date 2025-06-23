@@ -1,0 +1,109 @@
+{
+  "messages": [
+    {
+      "time": 1750704899.2992058,
+      "raw_time": false,
+      "sender": "4f50c103636a45d1ae6572aa1f2730cb",
+      "body": "@PRReviewPersona hi",
+      "mentions": [
+        "jupyter-ai-personas::jupyter_ai_personas::PRReviewPersona"
+      ],
+      "id": "172ba2e7-e476-4af5-865c-c5414fb4c0e7",
+      "type": "msg"
+    },
+    {
+      "id": "2be21be2-46b4-4161-bf5e-5da15c251483",
+      "raw_time": false,
+      "sender": "jupyter-ai-personas::jupyter_ai_personas::PRReviewPersona",
+      "time": 1750704907.503,
+      "type": "msg",
+      "mentions": [],
+      "body": "PR Review Error (ModelProviderError): {'Error': {'Message': 'The security token included in the request is expired', 'Code': 'ExpiredTokenException'}, 'ResponseMetadata': {'RequestId': 'dacc4be8-954f-4506-bd74-2ef03b005ba9', 'HTTPStatusCode': 403, 'HTTPHeaders': {'date': 'Mon, 23 Jun 2025 18:55:07 GMT', 'content-type': 'application/json', 'content-length': '67', 'connection': 'keep-alive', 'x-amzn-requestid': 'dacc4be8-954f-4506-bd74-2ef03b005ba9', 'x-amzn-errortype': 'ExpiredTokenException:http://internal.amazon.com/coral/com.amazon.coral.service/'}, 'RetryAttempts': 0}}\nAn unexpected error occurred while the PR review team was analyzing your request."
+    }
+  ],
+  "users": {
+    "4f50c103636a45d1ae6572aa1f2730cb": {
+      "initials": "AI",
+      "color": "var(--jp-collaborator-color3)",
+      "avatar_url": null,
+      "mention_name": "@Anonymous-Iocaste",
+      "username": "4f50c103636a45d1ae6572aa1f2730cb",
+      "display_name": "Anonymous Iocaste",
+      "name": "Anonymous Iocaste"
+    },
+    "jupyter-ai-personas::jupyter_ai_test::DebugPersona": {
+      "initials": null,
+      "name": "DebugPersona",
+      "bot": true,
+      "display_name": "DebugPersona",
+      "color": null,
+      "mention_name": null,
+      "username": "jupyter-ai-personas::jupyter_ai_test::DebugPersona",
+      "avatar_url": "/api/ai/static/jupyternaut.svg"
+    },
+    "jupyter-ai-personas::jupyter_ai_personas::SoftwareTeamPersona": {
+      "display_name": "SoftwareTeamPersona",
+      "color": null,
+      "username": "jupyter-ai-personas::jupyter_ai_personas::SoftwareTeamPersona",
+      "initials": null,
+      "avatar_url": "/api/ai/static/jupyternaut.svg",
+      "name": "SoftwareTeamPersona",
+      "bot": true,
+      "mention_name": null
+    },
+    "jupyter-ai-personas::jupyter_ai::JupyternautPersona": {
+      "name": "Jupyternaut",
+      "color": null,
+      "avatar_url": "/api/ai/static/jupyternaut.svg",
+      "mention_name": null,
+      "display_name": "Jupyternaut",
+      "username": "jupyter-ai-personas::jupyter_ai::JupyternautPersona",
+      "bot": true,
+      "initials": null
+    },
+    "jupyter-ai-personas::jupyter_ai_personas::PRReviewPersona": {
+      "bot": true,
+      "name": "PRReviewPersona",
+      "color": null,
+      "display_name": "PRReviewPersona",
+      "initials": null,
+      "username": "jupyter-ai-personas::jupyter_ai_personas::PRReviewPersona",
+      "mention_name": "@PRReviewPersona",
+      "avatar_url": "/api/ai/static/jupyternaut.svg"
+    },
+    "jupyter-ai-personas::jupyter_ai_personas::FinancePersona": {
+      "display_name": "FinancePersona",
+      "name": "FinancePersona",
+      "username": "jupyter-ai-personas::jupyter_ai_personas::FinancePersona",
+      "initials": null,
+      "mention_name": null,
+      "color": null,
+      "bot": true,
+      "avatar_url": "/api/ai/static/jupyternaut.svg"
+    },
+    "jupyter-ai-personas::jupyter_ai_test::IssueScoringPersona": {
+      "mention_name": null,
+      "username": "jupyter-ai-personas::jupyter_ai_test::IssueScoringPersona",
+      "bot": true,
+      "initials": null,
+      "name": "IssueScoringPersona",
+      "avatar_url": "/api/ai/static/jupyternaut.svg",
+      "display_name": "IssueScoringPersona",
+      "color": null
+    },
+    "jupyter-ai-personas::jupyter_ai_test::PRReviewPersona": {
+      "bot": true,
+      "display_name": "PRReviewPersona",
+      "name": "PRReviewPersona",
+      "username": "jupyter-ai-personas::jupyter_ai_test::PRReviewPersona",
+      "avatar_url": "/api/ai/static/jupyternaut.svg",
+      "color": null,
+      "initials": null,
+      "mention_name": null
+    }
+  },
+  "attachments": {},
+  "metadata": {
+    "id": "6d97902c-db38-4a9b-90fb-b8a7e8240e2d"
+  }
+}

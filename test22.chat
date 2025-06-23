@@ -1,0 +1,109 @@
+{
+  "messages": [
+    {
+      "body": "@PRReviewPersona review https://github.com/jupyter-ai-contrib/jupyter-ai-personas/pull/5",
+      "sender": "4f50c103636a45d1ae6572aa1f2730cb",
+      "mentions": [
+        "jupyter-ai-personas::jupyter_ai_personas::PRReviewPersona"
+      ],
+      "type": "msg",
+      "id": "26715c0d-c479-47b2-85be-4a16f12a0095",
+      "raw_time": false,
+      "time": 1750706050.750911
+    },
+    {
+      "mentions": [],
+      "time": 1750706050.848327,
+      "id": "b7bf27a8-e316-4d51-961c-32da9c0f0c55",
+      "raw_time": false,
+      "type": "msg",
+      "body": "PR Review Error (NotImplementedError): Async not supported on AwsBedrock.\nAn unexpected error occurred while the PR review team was analyzing your request.",
+      "sender": "jupyter-ai-personas::jupyter_ai_personas::PRReviewPersona"
+    }
+  ],
+  "users": {
+    "jupyter-ai-personas::jupyter_ai_personas::PRReviewPersona": {
+      "avatar_url": "/api/ai/static/jupyternaut.svg",
+      "color": null,
+      "mention_name": "@PRReviewPersona",
+      "initials": null,
+      "username": "jupyter-ai-personas::jupyter_ai_personas::PRReviewPersona",
+      "display_name": "PRReviewPersona",
+      "name": "PRReviewPersona",
+      "bot": true
+    },
+    "jupyter-ai-personas::jupyter_ai_test::IssueScoringPersona": {
+      "mention_name": null,
+      "name": "IssueScoringPersona",
+      "initials": null,
+      "color": null,
+      "display_name": "IssueScoringPersona",
+      "avatar_url": "/api/ai/static/jupyternaut.svg",
+      "bot": true,
+      "username": "jupyter-ai-personas::jupyter_ai_test::IssueScoringPersona"
+    },
+    "jupyter-ai-personas::jupyter_ai_test::DebugPersona": {
+      "mention_name": null,
+      "display_name": "DebugPersona",
+      "bot": true,
+      "initials": null,
+      "username": "jupyter-ai-personas::jupyter_ai_test::DebugPersona",
+      "color": null,
+      "avatar_url": "/api/ai/static/jupyternaut.svg",
+      "name": "DebugPersona"
+    },
+    "jupyter-ai-personas::jupyter_ai_personas::SoftwareTeamPersona": {
+      "name": "SoftwareTeamPersona",
+      "initials": null,
+      "username": "jupyter-ai-personas::jupyter_ai_personas::SoftwareTeamPersona",
+      "avatar_url": "/api/ai/static/jupyternaut.svg",
+      "mention_name": null,
+      "color": null,
+      "bot": true,
+      "display_name": "SoftwareTeamPersona"
+    },
+    "jupyter-ai-personas::jupyter_ai::JupyternautPersona": {
+      "name": "Jupyternaut",
+      "bot": true,
+      "avatar_url": "/api/ai/static/jupyternaut.svg",
+      "mention_name": null,
+      "initials": null,
+      "display_name": "Jupyternaut",
+      "username": "jupyter-ai-personas::jupyter_ai::JupyternautPersona",
+      "color": null
+    },
+    "jupyter-ai-personas::jupyter_ai_test::PRReviewPersona": {
+      "bot": true,
+      "avatar_url": "/api/ai/static/jupyternaut.svg",
+      "initials": null,
+      "name": "PRReviewPersona",
+      "display_name": "PRReviewPersona",
+      "color": null,
+      "mention_name": null,
+      "username": "jupyter-ai-personas::jupyter_ai_test::PRReviewPersona"
+    },
+    "jupyter-ai-personas::jupyter_ai_personas::FinancePersona": {
+      "username": "jupyter-ai-personas::jupyter_ai_personas::FinancePersona",
+      "name": "FinancePersona",
+      "initials": null,
+      "mention_name": null,
+      "bot": true,
+      "display_name": "FinancePersona",
+      "color": null,
+      "avatar_url": "/api/ai/static/jupyternaut.svg"
+    },
+    "4f50c103636a45d1ae6572aa1f2730cb": {
+      "avatar_url": null,
+      "color": "var(--jp-collaborator-color3)",
+      "username": "4f50c103636a45d1ae6572aa1f2730cb",
+      "mention_name": "@Anonymous-Iocaste",
+      "initials": "AI",
+      "display_name": "Anonymous Iocaste",
+      "name": "Anonymous Iocaste"
+    }
+  },
+  "attachments": {},
+  "metadata": {
+    "id": "31ec7de6-6e25-4d2c-b1a8-51f23bab16a4"
+  }
+}

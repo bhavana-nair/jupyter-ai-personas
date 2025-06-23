@@ -1,0 +1,109 @@
+{
+  "messages": [
+    {
+      "raw_time": false,
+      "type": "msg",
+      "sender": "4f50c103636a45d1ae6572aa1f2730cb",
+      "body": "@PRReviewPersona Hello",
+      "id": "a1ff5218-ab60-4d89-a589-83e3f4e86715",
+      "time": 1750704852.758254,
+      "mentions": [
+        "jupyter-ai-personas::jupyter_ai_personas::PRReviewPersona"
+      ]
+    },
+    {
+      "raw_time": false,
+      "type": "msg",
+      "mentions": [],
+      "body": "PR Review Error (ModelProviderError): {'Error': {'Message': 'The security token included in the request is expired', 'Code': 'ExpiredTokenException'}, 'ResponseMetadata': {'RequestId': '2ce47bd7-abb2-4e7e-90a9-c1b4f98a2587', 'HTTPStatusCode': 403, 'HTTPHeaders': {'date': 'Mon, 23 Jun 2025 18:54:21 GMT', 'content-type': 'application/json', 'content-length': '67', 'connection': 'keep-alive', 'x-amzn-requestid': '2ce47bd7-abb2-4e7e-90a9-c1b4f98a2587', 'x-amzn-errortype': 'ExpiredTokenException:http://internal.amazon.com/coral/com.amazon.coral.service/'}, 'RetryAttempts': 0}}\nAn unexpected error occurred while the PR review team was analyzing your request.",
+      "id": "00726ab6-8e83-41a8-9851-925cb8932d9f",
+      "time": 1750704861.0695941,
+      "sender": "jupyter-ai-personas::jupyter_ai_personas::PRReviewPersona"
+    }
+  ],
+  "users": {
+    "jupyter-ai-personas::jupyter_ai_test::DebugPersona": {
+      "initials": null,
+      "avatar_url": "/api/ai/static/jupyternaut.svg",
+      "color": null,
+      "bot": true,
+      "name": "DebugPersona",
+      "display_name": "DebugPersona",
+      "username": "jupyter-ai-personas::jupyter_ai_test::DebugPersona",
+      "mention_name": null
+    },
+    "jupyter-ai-personas::jupyter_ai::JupyternautPersona": {
+      "mention_name": null,
+      "username": "jupyter-ai-personas::jupyter_ai::JupyternautPersona",
+      "initials": null,
+      "name": "Jupyternaut",
+      "display_name": "Jupyternaut",
+      "bot": true,
+      "avatar_url": "/api/ai/static/jupyternaut.svg",
+      "color": null
+    },
+    "jupyter-ai-personas::jupyter_ai_test::IssueScoringPersona": {
+      "initials": null,
+      "avatar_url": "/api/ai/static/jupyternaut.svg",
+      "username": "jupyter-ai-personas::jupyter_ai_test::IssueScoringPersona",
+      "mention_name": null,
+      "bot": true,
+      "color": null,
+      "display_name": "IssueScoringPersona",
+      "name": "IssueScoringPersona"
+    },
+    "jupyter-ai-personas::jupyter_ai_personas::SoftwareTeamPersona": {
+      "avatar_url": "/api/ai/static/jupyternaut.svg",
+      "mention_name": null,
+      "display_name": "SoftwareTeamPersona",
+      "color": null,
+      "bot": true,
+      "username": "jupyter-ai-personas::jupyter_ai_personas::SoftwareTeamPersona",
+      "name": "SoftwareTeamPersona",
+      "initials": null
+    },
+    "4f50c103636a45d1ae6572aa1f2730cb": {
+      "display_name": "Anonymous Iocaste",
+      "name": "Anonymous Iocaste",
+      "initials": "AI",
+      "avatar_url": null,
+      "mention_name": "@Anonymous-Iocaste",
+      "username": "4f50c103636a45d1ae6572aa1f2730cb",
+      "color": "var(--jp-collaborator-color3)"
+    },
+    "jupyter-ai-personas::jupyter_ai_personas::PRReviewPersona": {
+      "mention_name": "@PRReviewPersona",
+      "bot": true,
+      "display_name": "PRReviewPersona",
+      "avatar_url": "/api/ai/static/jupyternaut.svg",
+      "color": null,
+      "username": "jupyter-ai-personas::jupyter_ai_personas::PRReviewPersona",
+      "initials": null,
+      "name": "PRReviewPersona"
+    },
+    "jupyter-ai-personas::jupyter_ai_personas::FinancePersona": {
+      "name": "FinancePersona",
+      "username": "jupyter-ai-personas::jupyter_ai_personas::FinancePersona",
+      "avatar_url": "/api/ai/static/jupyternaut.svg",
+      "display_name": "FinancePersona",
+      "bot": true,
+      "mention_name": null,
+      "initials": null,
+      "color": null
+    },
+    "jupyter-ai-personas::jupyter_ai_test::PRReviewPersona": {
+      "display_name": "PRReviewPersona",
+      "username": "jupyter-ai-personas::jupyter_ai_test::PRReviewPersona",
+      "initials": null,
+      "bot": true,
+      "name": "PRReviewPersona",
+      "color": null,
+      "mention_name": null,
+      "avatar_url": "/api/ai/static/jupyternaut.svg"
+    }
+  },
+  "attachments": {},
+  "metadata": {
+    "id": "4a1bb03c-38af-4798-aadf-02027771c9e1"
+  }
+}
