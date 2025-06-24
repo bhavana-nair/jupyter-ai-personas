@@ -68,7 +68,6 @@ class BulkCodeAnalyzer:
             func_name = node.child_by_field_name("name").text.decode('utf8')
             func_code = node.text.decode('utf8', errors='ignore')
             
-            # Extract parameters
             params_node = node.child_by_field_name("parameters")
             params = []
             if params_node:
@@ -78,10 +77,11 @@ class BulkCodeAnalyzer:
             
             code_hash = hashlib.md5(func_code.encode()).hexdigest()
             
+            # function with code
             session.run(
                 "MERGE (f:Function {name: $name, file: $file}) "
-                "SET f.code_hash = $hash, f.parameters = $params, f.line_start = $start, f.line_end = $end",
-                name=func_name, file=file_path, hash=code_hash, params=params,
+                "SET f.code = $code, f.code_hash = $hash, f.parameters = $params, f.line_start = $start, f.line_end = $end",
+                name=func_name, file=file_path, code=func_code, hash=code_hash, params=params,
                 start=node.start_point[0], end=node.end_point[0]
             )
             
@@ -96,5 +96,6 @@ class BulkCodeAnalyzer:
             for child in node.children:
                 self._extract_code_elements(child, session, file_path, current_class)
 
-analyzer = BulkCodeAnalyzer("neo4j://127.0.0.1:7687", ("neo4j", "Bhavana@97"))
-analyzer.analyze_folder("source_code",clear_existing=True)  
+
+# analyzer = BulkCodeAnalyzer("neo4j://127.0.0.1:7687", ("neo4j", "Bhavana@97"))
+# analyzer.analyze_folder("source_code", clear_existing=True)

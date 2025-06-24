@@ -2,6 +2,7 @@ from agno.tools import Toolkit
 from bulk_analyzer import BulkCodeAnalyzer
 from neo4j import GraphDatabase
 import ast
+import os
 
 class CodeAnalysisTool(Toolkit):
     def __init__(self):
@@ -13,6 +14,7 @@ class CodeAnalysisTool(Toolkit):
         self.register(self.get_class_info)
         self.register(self.find_related_classes)
         self.register(self.query_code)
+        self.register(self.get_function_code)
     
     def analyze_folder(self, folder_path: str, clear_existing: bool = False) -> str:
         """Analyze all Python files in a folder and add to knowledge graph"""
@@ -70,6 +72,35 @@ class CodeAnalysisTool(Toolkit):
                 return info
         except Exception as e:
             return f"Error getting class info: {str(e)}"
+    
+    def get_function_code(self, function_name: str, class_name: str = None) -> str:
+        """Get the source code of a function from the knowledge graph"""
+        try:
+            with self.driver.session() as session:
+                # Query function with code directly
+                if class_name:
+                    result = session.run(
+                        "MATCH (c:Class {name: $class_name})-[:CONTAINS]->(f:Function {name: $function_name}) "
+                        "RETURN f.code as code, f.file as file, f.line_start as line_start, f.line_end as line_end",
+                        class_name=class_name, function_name=function_name
+                    )
+                else:
+                    result = session.run(
+                        "MATCH (f:Function {name: $function_name}) "
+                        "RETURN f.code as code, f.file as file, f.line_start as line_start, f.line_end as line_end",
+                        function_name=function_name
+                    )
+                
+                record = result.single()
+                if not record:
+                    return f"Function {function_name} not found"
+                
+                # If code is stored directly on the function node
+                if record["code"]:
+                    return f"Function {function_name} code:\n{record['code']}"
+                
+        except Exception as e:
+            return f"Error getting function code: {str(e)}"
     
     def find_related_classes(self, class_name: str) -> str:
         """Find all classes that inherit from the given class"""

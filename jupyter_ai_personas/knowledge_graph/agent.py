@@ -23,7 +23,7 @@ def main():
     #result = agent.run("hi")
 
     # result = agent.run("Analyze zoo.py and tell me what classes inherit from Animal")
-    result = agent.run("Analyze software_team_persona and tell me the content")
+    result = agent.run("Get the source code of process_message function in SoftwareTeamPersona class")
     print(result)
 
 
