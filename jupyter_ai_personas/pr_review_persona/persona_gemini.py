@@ -3,7 +3,6 @@ from jupyter_ai.personas.base_persona import BasePersona, PersonaDefaults
 from jupyterlab_chat.models import Message
 from jupyter_ai.history import YChatHistory
 from agno.agent import Agent
-from agno.models.aws import AwsBedrock
 import boto3
 from agno.tools.github import GithubTools
 from agno.tools.reasoning import ReasoningTools
@@ -11,11 +10,12 @@ from langchain_core.messages import HumanMessage
 from agno.tools.python import PythonTools
 from agno.team.team import Team
 from .ci_tools import CITools
+from agno.models.google import Gemini
 from .template import PRPersonaVariables, PR_PROMPT_TEMPLATE
 
 session = boto3.Session()
 
-class PRReviewPersona(BasePersona):
+class PRReviewPersonaG(BasePersona):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -23,7 +23,7 @@ class PRReviewPersona(BasePersona):
     @property
     def defaults(self):
         return PersonaDefaults(
-            name="PRReviewPersona",
+            name="PRReviewPersona_gemini",
             avatar_path="/api/ai/static/jupyternaut.svg",
             description="A specialized assistant for reviewing pull requests and providing detailed feedback.",
             system_prompt="You are a PR reviewer assistant that helps analyze code changes, provide feedback, and ensure code quality.",
@@ -33,15 +33,18 @@ class PRReviewPersona(BasePersona):
     def initialize_team(self, system_prompt):
         model_id = self.config.lm_provider_params["model_id"]
         github_token = os.getenv("GITHUB_ACCESS_TOKEN")
+        
+        if github_token:
+            os.environ['GITHUB_ACCESS_TOKEN'] = github_token
         if not github_token:
             raise ValueError("GITHUB_ACCESS_TOKEN environment variable is not set. Please set it with a plain GitHub personal access token (not GitHub Actions syntax).")
 
         code_quality = Agent(name="code_quality",
             role="Code Quality Analyst",
-            model=AwsBedrock(
-                id=model_id,
-                session=session
-            ),
+            model=Gemini(
+            id="gemini-1.0-pro",
+            api_key="AIzaSyCkD-2rU7O2Ubsf_iXV9rOZ2fmatZ5IxSA"
+        ),
             markdown=True,
             instructions=[
                 "You have access to CITools for analyzing CI failures. Always:",
@@ -63,11 +66,11 @@ class PRReviewPersona(BasePersona):
                 "   - Error handling and edge cases",
                 
                 "Always include CI analysis in your response, whether failures are found or not.",
+                f"GitHub token is configured: {bool(github_token)}"
             ],
             tools=[
                 PythonTools(),
-                # PRTools(),
-                GithubTools( get_pull_requests= True, get_pull_request_changes= True, create_pull_request_comment= True ),
+                GithubTools(get_pull_requests=True, get_pull_request_changes=True, create_pull_request_comment=True),
                 CITools(),
                 ReasoningTools(add_instructions=True, think=True, analyze=True)
             ]
@@ -75,10 +78,10 @@ class PRReviewPersona(BasePersona):
 
         documentation_checker = Agent(name="documentation_checker",
             role="Documentation Specialist",
-            model=AwsBedrock(
-                id=model_id,
-                session=session
-            ),
+            model=Gemini(
+            id="gemini-1.0-pro",
+            api_key="AIzaSyCkD-2rU7O2Ubsf_iXV9rOZ2fmatZ5IxSA"
+        ),
             instructions=[
                 "Review documentation completeness and quality:",
                 "1. Verify docstrings for new/modified functions and classes",
@@ -92,10 +95,10 @@ class PRReviewPersona(BasePersona):
 
         security_checker = Agent(name="security_checker",
             role="Security Analyst",
-            model=AwsBedrock(
-                id=model_id,
-                session=session
-            ),
+           model=Gemini(
+            id="gemini-1.0-pro",
+            api_key="AIzaSyCkD-2rU7O2Ubsf_iXV9rOZ2fmatZ5IxSA"
+        ),
             instructions=[
                 "Perform security analysis of code changes:",
                 "1. Check for exposed sensitive information (API keys, tokens, credentials)",
@@ -109,10 +112,10 @@ class PRReviewPersona(BasePersona):
 
         gitHub = Agent(name="github",
             role="GitHub Specialist",
-            model=AwsBedrock(
-                id=model_id,
-                session=session
-            ),
+            model=Gemini(
+            id="gemini-1.0-pro",
+            api_key="AIzaSyCkD-2rU7O2Ubsf_iXV9rOZ2fmatZ5IxSA"
+        ),
             instructions=[
                 "Monitor and analyze GitHub repository activities and changes",
                 "Fetch and process pull request data",
@@ -121,7 +124,7 @@ class PRReviewPersona(BasePersona):
                 "Note: Requires a valid GitHub personal access token in GITHUB_ACCESS_TOKEN environment variable"
             ],
             tools=[
-                GithubTools( create_pull_request_comment= True, get_pull_requests= True, get_pull_request_changes= True),
+                GithubTools(create_pull_request_comment=True, get_pull_requests=True, get_pull_request_changes=True),
                 # PRTools()
             ],
             markdown=True
@@ -132,10 +135,10 @@ class PRReviewPersona(BasePersona):
             name="pr-review-team",
             mode="coordinate",
             members=[code_quality, documentation_checker, security_checker, gitHub],
-            model=AwsBedrock(
-                id=model_id,
-                session=session
-            ),
+            model=Gemini(
+            id="gemini-1.0-pro",
+            api_key="AIzaSyCkD-2rU7O2Ubsf_iXV9rOZ2fmatZ5IxSA"
+        ),
             instructions=[
                 "Coordinate PR review process with specialized team members:",
                 
@@ -168,7 +171,7 @@ class PRReviewPersona(BasePersona):
             enable_agentic_context=True,
             add_datetime_to_instructions=True,
             tools=[
-                GithubTools( create_pull_request_comment= True, get_pull_requests= True, get_pull_request_changes= True),
+                GithubTools(create_pull_request_comment=True, get_pull_requests=True, get_pull_request_changes=True),
                 ReasoningTools(add_instructions=True, think=True, analyze=True)
             ]
         )
@@ -207,9 +210,11 @@ class PRReviewPersona(BasePersona):
                               stream_intermediate_steps=True,
                               show_full_reasoning=True)
 
-            response = response.content
+            # Handle different response structures between models
+            content = getattr(response, 'content', None) or str(response) or "No response generated"
+            
             async def response_iterator():
-                yield response
+                yield content
             
             await self.stream_message(response_iterator())
             
