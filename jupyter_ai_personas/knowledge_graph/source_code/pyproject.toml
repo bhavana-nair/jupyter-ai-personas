@@ -1,0 +1,56 @@
+[project]
+name = "jupyter-ai-personas"
+version = "0.1.0"
+description = "Enhancing Jupyter AI with Personas"
+readme = "README.md"
+authors = [
+    { name = "S R Das", email = "srdas@scu.edu" }
+]
+requires-python = ">=3.9"
+
+dependencies = [
+    "jupyter_ai>=3.0.0a1"
+]
+
+[project.optional-dependencies]
+finance = [
+    "boto3",
+    "lancedb", 
+    "tantivy", 
+    "pypdf", 
+    "faiss-cpu",
+    "duckdb",
+    "numpy",
+    "pandas",
+    "scikit-learn",
+    "scipy",
+    "mcp",
+    "agno",
+    "duckduckgo-search",
+    "matplotlib",
+    "statsmodels",
+    "yfinance",
+    "openai"
+]
+emoji = [
+    "emoji",
+    "langchain-aws"
+]
+
+software_team = [ 
+    "agno",
+    "boto3",
+    "langchain",
+    "langchain-core",
+    "pygithub"]
+
+all = ["jupyter-ai-personas[finance,emoji,software_team]"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project.entry-points."jupyter_ai.personas"]
+finance_persona = "jupyter_ai_personas.finance_persona.persona:FinancePersona"
+emoji_persona = "jupyter_ai_personas.emoji_persona.persona:EmojiPersona"
+software_team_persona = "jupyter_ai_personas.software_team_persona.persona:SoftwareTeamPersona"

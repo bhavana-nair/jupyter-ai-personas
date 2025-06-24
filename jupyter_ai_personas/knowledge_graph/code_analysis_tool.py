@@ -1,0 +1,99 @@
+from agno.tools import Toolkit
+from bulk_analyzer import BulkCodeAnalyzer
+from neo4j import GraphDatabase
+import ast
+
+class CodeAnalysisTool(Toolkit):
+    def __init__(self):
+        super().__init__(name="code_analysis")
+        self.analyzer = BulkCodeAnalyzer("neo4j://127.0.0.1:7687", ("neo4j", "Bhavana@97"))
+        self.driver = GraphDatabase.driver("neo4j://127.0.0.1:7687", auth=("neo4j", "Bhavana@97"))
+        self.register(self.analyze_folder)
+        self.register(self.analyze_file)
+        self.register(self.get_class_info)
+        self.register(self.find_related_classes)
+        self.register(self.query_code)
+    
+    def analyze_folder(self, folder_path: str, clear_existing: bool = False) -> str:
+        """Analyze all Python files in a folder and add to knowledge graph"""
+        try:
+            self.analyzer.analyze_folder(folder_path, clear_existing)
+            return f"Successfully analyzed folder {folder_path}"
+        except Exception as e:
+            return f"Error analyzing folder {folder_path}: {str(e)}"
+    
+    def analyze_file(self, file_path: str) -> str:
+        """Analyze a single Python file and add it to the knowledge graph"""
+        try:
+            with self.analyzer.driver.session() as session:
+                self.analyzer._analyze_file(file_path, session)
+            return f"Successfully analyzed {file_path}"
+        except Exception as e:
+            return f"Error analyzing {file_path}: {str(e)}"
+    
+    def get_class_info(self, class_name: str) -> str:
+        """Get detailed information about a class from the knowledge graph"""
+        try:
+            with self.driver.session() as session:
+                # Get class info
+                class_result = session.run(
+                    "MATCH (c:Class {name: $class_name}) RETURN c.file as file",
+                    class_name=class_name
+                )
+                class_record = class_result.single()
+                if not class_record:
+                    return f"Class {class_name} not found in knowledge graph"
+                
+                inherit_result = session.run(
+                    "MATCH (c:Class {name: $class_name})-[:INHERITS_FROM]->(parent:Class) "
+                    "RETURN parent.name as parent_name",
+                    class_name=class_name
+                )
+                parents = [record["parent_name"] for record in inherit_result]
+                
+                method_result = session.run(
+                    "MATCH (c:Class {name: $class_name})-[:CONTAINS]->(f:Function) "
+                    "RETURN f.name as method_name, f.parameters as params",
+                    class_name=class_name
+                )
+                methods = [(record["method_name"], record["params"]) for record in method_result]
+                
+                info = f"Class {class_name}:\n"
+                info += f"  File: {class_record['file']}\n"
+                if parents:
+                    info += f"  Inherits from: {', '.join(parents)}\n"
+                info += f"  Methods:\n"
+                for method_name, params in methods:
+                    param_str = ', '.join(params) if params else ''
+                    info += f"    {method_name}({param_str})\n"
+                
+                return info
+        except Exception as e:
+            return f"Error getting class info: {str(e)}"
+    
+    def find_related_classes(self, class_name: str) -> str:
+        """Find all classes that inherit from the given class"""
+        try:
+            with self.driver.session() as session:
+                result = session.run(
+                    "MATCH (related:Class)-[:INHERITS_FROM*]->(c:Class {name: $class_name}) "
+                    "RETURN related.name as related_class",
+                    class_name=class_name
+                )
+                related = [record["related_class"] for record in result]
+            if related:
+                return f"Classes that inherit from {class_name}: {', '.join(related)}"
+            else:
+                return f"No classes inherit from {class_name}"
+        except Exception as e:
+            return f"Error finding related classes: {str(e)}"
+    
+    def query_code(self, query: str) -> str:
+        """Execute custom Cypher queries on the code knowledge graph"""
+        try:
+            with self.driver.session() as session:
+                result = session.run(query)
+                records = [dict(record) for record in result]
+                return str(records) if records else "No results found"
+        except Exception as e:
+            return f"Query error: {str(e)}"
