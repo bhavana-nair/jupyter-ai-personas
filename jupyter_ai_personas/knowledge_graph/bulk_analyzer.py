@@ -48,7 +48,6 @@ class BulkCodeAnalyzer:
                 name=class_name, file=file_path
             )
             
-            # Extract inheritance
             superclasses = node.child_by_field_name("superclasses")
             if superclasses:
                 for child in superclasses.children:
@@ -77,7 +76,6 @@ class BulkCodeAnalyzer:
             
             code_hash = hashlib.md5(func_code.encode()).hexdigest()
             
-            # function with code
             session.run(
                 "MERGE (f:Function {name: $name, file: $file}) "
                 "SET f.code = $code, f.code_hash = $hash, f.parameters = $params, f.line_start = $start, f.line_end = $end",

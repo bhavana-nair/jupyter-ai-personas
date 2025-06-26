@@ -1,5 +1,4 @@
 
-import os
 from agno.agent import Agent
 from agno.tools.reasoning import ReasoningTools
 from agno.models.google import Gemini
@@ -20,12 +19,8 @@ def main():
             api_key="AIzaSyCkD-2rU7O2Ubsf_iXV9rOZ2fmatZ5IxSA"
         )
     )
-    #result = agent.run("hi")
-
-    # result = agent.run("Analyze zoo.py and tell me what classes inherit from Animal")
     result = agent.run("Get the source code of process_message function in SoftwareTeamPersona class")
     print(result)
-
 
 if __name__ == "__main__":
     main()
