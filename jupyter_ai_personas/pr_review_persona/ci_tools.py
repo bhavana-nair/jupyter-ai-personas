@@ -43,26 +43,17 @@ class CITools(Toolkit):
         g = Github(os.getenv("GITHUB_ACCESS_TOKEN"))
         repo = g.get_repo(repo_name)
         pr_data = repo.get_pull(pr_number)
-
         runs = repo.get_workflow_runs(branch=pr_data.head.ref)
         failures = []
 
         for run in runs:
             if run.head_sha == pr_data.head.sha:
-                print("check1")
-                print(repo_name)
-                print(run.id)
-
                 jobs = run.jobs()
 
                 for job in jobs:
                     if job.conclusion == "failure":
-                        print("check2")
-                        print(f"Found failed job: {job.name}")
-
                         job_id = job.raw_data["id"]
-                        
-
+    
                         headers = {
                             "Accept": "application/vnd.github+json",
                             "Authorization": f"Bearer {self.github_token}",
@@ -74,22 +65,10 @@ class CITools(Toolkit):
                         if log_response.status_code != 200:
                             raise Exception(f"Failed to fetch logs: {log_response.status_code} {log_response.text} from {log_url}")
                         log_content = log_response.text
-
-                        ##If seeing ThrottlingException in test aws account uncomment these lines [81-87] and line  92 AND comment line 93
-
-                        # # Extract key error lines from the log
-                        # log_lines = log_content.splitlines()
-                        # error_lines = []
-                        # for line in log_lines[-20:]:  
-                        #     if 'error:' in line.lower() or 'fail:' in line.lower():
-                        #         error_lines.append(line)
-                        #         if len(error_lines) >= 10: 
-                        #             break
                         
                         failure_data = {
                             "name": job.name,
                             "id": job_id,
-                            # "error_lines": error_lines if error_lines else [log_lines[-1]],  
                             "log": log_content
                         }
                         failures.append(failure_data)
@@ -101,7 +80,6 @@ class CITools(Toolkit):
                         
                         agent.session_state["ci_logs"].append(failure_data)
 
-        print(f"Found {len(failures)} failed jobs")
         return failures
 
     def get_ci_logs(self, agent: Agent, job_name: str = None) -> list:

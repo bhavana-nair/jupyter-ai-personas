@@ -31,7 +31,7 @@ class PRReviewPersonaG(BasePersona):
     
 
     def initialize_team(self, system_prompt):
-        model_id = self.config.lm_provider_params["model_id"]
+        # model_id = self.config.lm_provider_params["model_id"]
         github_token = os.getenv("GITHUB_ACCESS_TOKEN")
         
         if github_token:
@@ -42,7 +42,7 @@ class PRReviewPersonaG(BasePersona):
         code_quality = Agent(name="code_quality",
             role="Code Quality Analyst",
             model=Gemini(
-            id="gemini-1.0-pro",
+            id="gemini-1.5-flash",
             api_key="AIzaSyCkD-2rU7O2Ubsf_iXV9rOZ2fmatZ5IxSA"
         ),
             markdown=True,
@@ -65,12 +65,11 @@ class PRReviewPersonaG(BasePersona):
                 "   - Performance implications",
                 "   - Error handling and edge cases",
                 
-                "Always include CI analysis in your response, whether failures are found or not.",
                 f"GitHub token is configured: {bool(github_token)}"
             ],
             tools=[
                 PythonTools(),
-                GithubTools(get_pull_requests=True, get_pull_request_changes=True, create_pull_request_comment=True),
+                GithubTools(get_pull_requests=True, get_pull_request_changes=True, get_file_content = True, get_directory_content= True),
                 CITools(),
                 ReasoningTools(add_instructions=True, think=True, analyze=True)
             ]
@@ -79,7 +78,7 @@ class PRReviewPersonaG(BasePersona):
         documentation_checker = Agent(name="documentation_checker",
             role="Documentation Specialist",
             model=Gemini(
-            id="gemini-1.0-pro",
+            id="gemini-1.5-flash",
             api_key="AIzaSyCkD-2rU7O2Ubsf_iXV9rOZ2fmatZ5IxSA"
         ),
             instructions=[
@@ -96,7 +95,7 @@ class PRReviewPersonaG(BasePersona):
         security_checker = Agent(name="security_checker",
             role="Security Analyst",
            model=Gemini(
-            id="gemini-1.0-pro",
+            id="gemini-1.5-flash",
             api_key="AIzaSyCkD-2rU7O2Ubsf_iXV9rOZ2fmatZ5IxSA"
         ),
             instructions=[
@@ -113,7 +112,7 @@ class PRReviewPersonaG(BasePersona):
         gitHub = Agent(name="github",
             role="GitHub Specialist",
             model=Gemini(
-            id="gemini-1.0-pro",
+            id="gemini-1.5-flash",
             api_key="AIzaSyCkD-2rU7O2Ubsf_iXV9rOZ2fmatZ5IxSA"
         ),
             instructions=[
@@ -136,7 +135,7 @@ class PRReviewPersonaG(BasePersona):
             mode="coordinate",
             members=[code_quality, documentation_checker, security_checker, gitHub],
             model=Gemini(
-            id="gemini-1.0-pro",
+            id="gemini-1.5-flash",
             api_key="AIzaSyCkD-2rU7O2Ubsf_iXV9rOZ2fmatZ5IxSA"
         ),
             instructions=[
@@ -211,10 +210,10 @@ class PRReviewPersonaG(BasePersona):
                               show_full_reasoning=True)
 
             # Handle different response structures between models
-            content = getattr(response, 'content', None) or str(response) or "No response generated"
+            response = response.content
             
             async def response_iterator():
-                yield content
+                yield response
             
             await self.stream_message(response_iterator())
             
