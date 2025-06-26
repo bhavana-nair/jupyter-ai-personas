@@ -12,7 +12,7 @@ from agno.team.team import Team
 from .ci_tools import CITools
 from agno.models.google import Gemini
 from .template import PRPersonaVariables, PR_PROMPT_TEMPLATE
-from pr_comment_tool import create_pr_comment_with_head_sha
+from .pr_comment_tool import create_inline_pr_comments
 
 session = boto3.Session()
 
@@ -42,7 +42,7 @@ class PRReviewPersonaG(BasePersona):
         code_quality = Agent(name="code_quality",
             role="Code Quality Analyst",
             model=Gemini(
-            id="gemini-1.5-flash",
+            id="gemini-2.5-pro",
             api_key="AIzaSyCkD-2rU7O2Ubsf_iXV9rOZ2fmatZ5IxSA"
         ),
             markdown=True,
@@ -78,7 +78,7 @@ class PRReviewPersonaG(BasePersona):
         documentation_checker = Agent(name="documentation_checker",
             role="Documentation Specialist",
             model=Gemini(
-            id="gemini-1.5-flash",
+            id="gemini-2.5-pro",
             api_key="AIzaSyCkD-2rU7O2Ubsf_iXV9rOZ2fmatZ5IxSA"
         ),
             instructions=[
@@ -95,7 +95,7 @@ class PRReviewPersonaG(BasePersona):
         security_checker = Agent(name="security_checker",
             role="Security Analyst",
            model=Gemini(
-            id="gemini-1.5-flash",
+            id="gemini-2.5-pro",
             api_key="AIzaSyCkD-2rU7O2Ubsf_iXV9rOZ2fmatZ5IxSA"
         ),
             instructions=[
@@ -112,7 +112,7 @@ class PRReviewPersonaG(BasePersona):
         gitHub = Agent(name="github",
             role="GitHub Specialist",
             model=Gemini(
-            id="gemini-1.5-flash",
+            id="gemini-2.5-pro",
             api_key="AIzaSyCkD-2rU7O2Ubsf_iXV9rOZ2fmatZ5IxSA"
         ),
             instructions=[
@@ -121,14 +121,27 @@ class PRReviewPersonaG(BasePersona):
                 "Analyze code changes and provide structured feedback",
                 "Create a comment on a specific line of a specific file in a pull request.",
                 "Note: Requires a valid GitHub personal access token in GITHUB_ACCESS_TOKEN environment variable"
-                "You would comment on the PR what the user would like to say",
-                "Use create_pr_comment_with_head_sha to create PR comments - it handles everything automatically"
+            "   - Use the create_inline_pr_comments tool to post multiple specific comments on code lines",
+            "   - The tool requires these parameters:",
+            "     * repo_name: The full repository name including owner (e.g., 'bhavana-nair/jupyter-ai-personas')",
+            "     * pr_number: The PR number as an integer (e.g., 5)",
+            "     * comments: A list of comment objects, each with:",
+            "       - path: The relative file path (e.g., 'src/main.py')",
+            "       - position: The line number to comment on (e.g., 42)",
+            "       - body: The specific comment text for that line",
+            "   - Example usage:",
+            "     create_inline_pr_comments(",
+            "       repo_name='bhavana-nair/jupyter-ai-personas',",
+            "       pr_number=5,",
+            "       comments=[",
+            "         {'path': 'README.md', 'position': 10, 'body': 'Consider adding more details here'},",
+            "         {'path': 'src/main.py', 'position': 42, 'body': 'This could be optimized'}",
+            "       ]",
+            "     )"
             ],
             tools=[
                 GithubTools(create_pull_request_comment=True, get_pull_requests=True, get_pull_request_changes=True),
-                ReasoningTools(add_instructions=True, think=True, analyze=True),
-                create_pr_comment_with_head_sha
-                # PRTools()
+                ReasoningTools(add_instructions=True, think=True, analyze=True),create_inline_pr_comments
             ],
             markdown=True
         )
@@ -139,7 +152,7 @@ class PRReviewPersonaG(BasePersona):
             mode="coordinate",
             members=[code_quality, documentation_checker, security_checker, gitHub],
             model=Gemini(
-            id="gemini-1.5-flash",
+            id="gemini-2.5-pro",
             api_key="AIzaSyCkD-2rU7O2Ubsf_iXV9rOZ2fmatZ5IxSA"
         ),
             instructions=[
@@ -213,7 +226,6 @@ class PRReviewPersonaG(BasePersona):
                               stream_intermediate_steps=True,
                               show_full_reasoning=True)
 
-            # Handle different response structures between models
             response = response.content
             
             async def response_iterator():
