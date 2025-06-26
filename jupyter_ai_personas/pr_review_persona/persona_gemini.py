@@ -12,6 +12,7 @@ from agno.team.team import Team
 from .ci_tools import CITools
 from agno.models.google import Gemini
 from .template import PRPersonaVariables, PR_PROMPT_TEMPLATE
+from pr_comment_tool import create_pr_comment_with_head_sha
 
 session = boto3.Session()
 
@@ -29,7 +30,6 @@ class PRReviewPersonaG(BasePersona):
             system_prompt="You are a PR reviewer assistant that helps analyze code changes, provide feedback, and ensure code quality.",
         )
     
-
     def initialize_team(self, system_prompt):
         # model_id = self.config.lm_provider_params["model_id"]
         github_token = os.getenv("GITHUB_ACCESS_TOKEN")
@@ -121,9 +121,13 @@ class PRReviewPersonaG(BasePersona):
                 "Analyze code changes and provide structured feedback",
                 "Create a comment on a specific line of a specific file in a pull request.",
                 "Note: Requires a valid GitHub personal access token in GITHUB_ACCESS_TOKEN environment variable"
+                "You would comment on the PR what the user would like to say",
+                "Use create_pr_comment_with_head_sha to create PR comments - it handles everything automatically"
             ],
             tools=[
                 GithubTools(create_pull_request_comment=True, get_pull_requests=True, get_pull_request_changes=True),
+                ReasoningTools(add_instructions=True, think=True, analyze=True),
+                create_pr_comment_with_head_sha
                 # PRTools()
             ],
             markdown=True
