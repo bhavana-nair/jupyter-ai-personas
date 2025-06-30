@@ -1,6 +1,9 @@
+from typing import Any, Dict, List
 from github import Github, GithubException
 from os import getenv
+from agno.tools import tool
 
+@tool
 def create_inline_pr_comments(repo_name: str, pr_number: int, comments: List[Dict[str, Any]]) -> str:
     """Create multiple inline comments on a pull request.
     
@@ -20,6 +23,7 @@ def create_inline_pr_comments(repo_name: str, pr_number: int, comments: List[Dic
     Returns:
         str: Success message with URLs of created comments or error.
     """
+    print(f"[DEBUG] create_inline_pr_comments called with repo={repo_name}, pr={pr_number}, comments={len(comments) if comments else 0}")
     try:
         access_token = getenv("GITHUB_ACCESS_TOKEN")
         if not access_token:
@@ -31,11 +35,13 @@ def create_inline_pr_comments(repo_name: str, pr_number: int, comments: List[Dic
         head_repo = pr.head.repo
         commit = head_repo.get_commit(pr.head.sha)
         
-        # Create a summary comment first
-        summary = "# PR Review Summary\n\n"
-        summary += "I've reviewed this PR and left inline comments on specific issues. "
-        summary += "Please check the individual comments for details.\n"
-        pr.create_issue_comment(summary)
+        print(f"[DEBUG] About to create {len(comments)} inline comments")
+        
+        # Skip summary comment for now to focus on inline comments
+        # summary = "# PR Review Summary\n\n"
+        # summary += "I've reviewed this PR and left inline comments on specific issues. "
+        # summary += "Please check the individual comments for details.\n"
+        # pr.create_issue_comment(summary)
         
         # Create all inline comments
         comment_urls = []

@@ -18,27 +18,18 @@ class CITools(Toolkit):
             self.get_ci_logs
         ],  **kwargs)
 
-    def fetch_ci_failure_data(self, agent: Agent,  repo_url: str, pr_number: int) -> list:
+    def fetch_ci_failure_data(self, agent: Agent, repo_name: str, pr_number: int) -> list:
         """
         Fetch CI Failure data from GitHub API and store it in the agent's session state.
         
         Args:
             agent (Agent): The agent instance to store logs in session state
-            repo_url (str): URL of the GitHub repository
+            repo_name (str): Repository in owner/repo format (e.g., 'owner/repo')
             pr_number (int): Pull request number
             
         Returns:
             list: List of failure data containing job name, id and log information
         """
-        match = None
-        if "github.com" in repo_url:
-            match = re.search(r"github\.com/([^/]+)/([^/]+)", repo_url)
-            
-        if not match:
-            raise ValueError("Invalid GitHub URL format. Expected either github.com/owner/repo or api.github.com/repos/owner/repo")
-
-        owner, repo_name = match.groups()
-        repo_name = f"{owner}/{repo_name}"
 
         g = Github(os.getenv("GITHUB_ACCESS_TOKEN"))
         repo = g.get_repo(repo_name)
