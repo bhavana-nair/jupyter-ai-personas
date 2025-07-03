@@ -1,5 +1,5 @@
 from agno.tools import Toolkit
-from bulk_analyzer import BulkCodeAnalyzer
+from .bulk_analyzer import BulkCodeAnalyzer
 from neo4j import GraphDatabase
 import ast
 import os
@@ -7,32 +7,12 @@ import os
 class CodeAnalysisTool(Toolkit):
     def __init__(self):
         super().__init__(name="code_analysis")
-        self.analyzer = BulkCodeAnalyzer("neo4j://127.0.0.1:7687", ("neo4j", "Bhavana@97"))
         self.driver = GraphDatabase.driver("neo4j://127.0.0.1:7687", auth=("neo4j", "Bhavana@97"))
-        self.register(self.analyze_folder)
-        self.register(self.analyze_file)
         self.register(self.get_class_info)
         self.register(self.find_related_classes)
         self.register(self.query_code)
         self.register(self.get_function_code)
-    
-    def analyze_folder(self, folder_path: str, clear_existing: bool = False) -> str:
-        """Analyze all Python files in a folder and add to knowledge graph"""
-        try:
-            self.analyzer.analyze_folder(folder_path, clear_existing)
-            return f"Successfully analyzed folder {folder_path}"
-        except Exception as e:
-            return f"Error analyzing folder {folder_path}: {str(e)}"
-    
-    def analyze_file(self, file_path: str) -> str:
-        """Analyze a single Python file and add it to the knowledge graph"""
-        try:
-            with self.analyzer.driver.session() as session:
-                self.analyzer._analyze_file(file_path, session)
-            return f"Successfully analyzed {file_path}"
-        except Exception as e:
-            return f"Error analyzing {file_path}: {str(e)}"
-    
+
     def get_class_info(self, class_name: str) -> str:
         """Get detailed information about a class from the knowledge graph"""
         try:

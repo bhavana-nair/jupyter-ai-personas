@@ -11,25 +11,32 @@ class BulkCodeAnalyzer:
         self.parser = Parser(self.PY_LANGUAGE)
     
     def analyze_folder(self, folder_path, clear_existing=False):
-        """Analyze all .py files in a folder and add to knowledge graph"""
+        """Analyze all supported files in a folder and add to knowledge graph"""
         if clear_existing:
             with self.driver.session() as session:
                 session.run("MATCH (n) DETACH DELETE n")
                 print("Cleared existing graph")
         
-        py_files = []
+        # Supported file extensions
+        supported_extensions = {'.py', '.ts', '.js', '.tsx', '.jsx'}
+        
+        all_files = []
         for root, dirs, files in os.walk(folder_path):
             for file in files:
-                if file.endswith('.py'):
-                    py_files.append(os.path.join(root, file))
+                file_ext = os.path.splitext(file)[1]
+                if file_ext in supported_extensions:
+                    all_files.append(os.path.join(root, file))
         
-        print(f"Found {len(py_files)} Python files")
+        print(f"Found {len(all_files)} supported files")
         
         with self.driver.session() as session:
-            for file_path in py_files:
+            for file_path in all_files:
                 print(f"Analyzing: {file_path}")
                 try:
-                    self._analyze_file(file_path, session)
+                    if file_path.endswith('.py'):
+                        self._analyze_file(file_path, session)
+                    else:
+                        self._analyze_non_python_file(file_path, session)
                 except Exception as e:
                     print(f"Error analyzing {file_path}: {e}")
     
@@ -89,10 +96,69 @@ class BulkCodeAnalyzer:
                     "MERGE (c)-[:CONTAINS]->(f)",
                     class_name=current_class, func_name=func_name, file=file_path
                 )
+            
+            # Extract function calls
+            self._extract_function_calls(node, session, func_name, file_path)
         
         else:
             for child in node.children:
                 self._extract_code_elements(child, session, file_path, current_class)
+    
+    def _analyze_non_python_file(self, file_path, session):
+        """Analyze non-Python files (basic content indexing)"""
+        try:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+            
+            # Create a File node for non-Python files
+            session.run(
+                "MERGE (f:File {path: $path}) SET f.content = $content, f.size = $size, f.type = $type",
+                path=file_path, 
+                content=content[:5000],  # Limit content size
+                size=len(content),
+                type=os.path.splitext(file_path)[1]
+            )
+            
+        except Exception as e:
+            print(f"Error reading {file_path}: {e}")
+            # Create File node without content
+            session.run(
+                "MERGE (f:File {path: $path}) SET f.error = $error, f.type = $type",
+                path=file_path,
+                error=str(e),
+                type=os.path.splitext(file_path)[1]
+            )
+    
+    def _extract_function_calls(self, func_node, session, caller_name, file_path):
+        """Extract function calls from a function body"""
+        def find_calls(node):
+            calls = []
+            if node.type == 'call':
+                func_expr = node.child_by_field_name('function')
+                if func_expr and func_expr.type == 'identifier':
+                    called_func = func_expr.text.decode('utf8')
+                    calls.append(called_func)
+                elif func_expr and func_expr.type == 'attribute':
+                    # Handle method calls like obj.method()
+                    attr = func_expr.child_by_field_name('attribute')
+                    if attr:
+                        called_func = attr.text.decode('utf8')
+                        calls.append(called_func)
+            
+            for child in node.children:
+                calls.extend(find_calls(child))
+            return calls
+        
+        called_functions = find_calls(func_node)
+        
+        for called_func in called_functions:
+            # Create CALLS relationship
+            session.run(
+                "MATCH (caller:Function {name: $caller, file: $file}) "
+                "MERGE (called:Function {name: $called}) "
+                "MERGE (caller)-[:CALLS]->(called)",
+                caller=caller_name, called=called_func, file=file_path
+            )
 
 
 # analyzer = BulkCodeAnalyzer("neo4j://127.0.0.1:7687", ("neo4j", "Bhavana@97"))

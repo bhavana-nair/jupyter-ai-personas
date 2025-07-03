@@ -1,4 +1,7 @@
 import os
+import subprocess
+import tempfile
+import re
 from jupyter_ai.personas.base_persona import BasePersona, PersonaDefaults
 from jupyterlab_chat.models import Message
 from jupyter_ai.history import YChatHistory
@@ -11,7 +14,12 @@ from langchain_core.messages import HumanMessage
 from agno.tools.python import PythonTools
 from agno.team.team import Team
 from .ci_tools import CITools
+from jupyter_ai_personas.knowledge_graph.ast_rag_tools import ASTRAGAnalysisTools
+# from .repo_analysis_tools import RepoAnalysisTools
 from .template import PRPersonaVariables, PR_PROMPT_TEMPLATE
+import sys
+sys.path.append('../knowledge_graph')
+from jupyter_ai_personas.knowledge_graph.bulk_analyzer import BulkCodeAnalyzer
 
 session = boto3.Session()
 
@@ -19,6 +27,7 @@ class PRReviewPersona(BasePersona):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.shared_analyzer = None
 
     @property
     def defaults(self):
@@ -44,31 +53,39 @@ class PRReviewPersona(BasePersona):
             ),
             markdown=True,
             instructions=[
-                "You have access to CITools for analyzing CI failures. Always:",
+                "You have access to CITools for analyzing CI failures and ASTRAGAnalysisTools for deep code analysis. Always:",
                 
                 "1. Get repository and PR information:",
                 "   - Extract repo URL and PR number from the request",
                 "   - Use GithubTools to fetch PR details",
                 
-                "2. Check CI failures using CITools:",
+                "2. Repository analysis (already completed):",
+                "   - Classes and functions stored separately with AST parsing",
+                "   - Use search_code to find relevant code chunks",
+                "   - Use search_classes to find specific classes",
+                "   - Use search_functions to find specific functions",
+                "   - Use get_function_source/get_class_source for exact retrieval",
+                "   - Search using natural language queries with precise results",
+                "   - Analyze affected functions and classes in the PR",
+                
+                "3. Check CI failures using CITools:",
                 "   - Call fetch_ci_failure_data with repo_url and pr_number",
                 "   - Use get_ci_logs to analyze any failures found",
-                "   - If failures exist, analyze error messages and logs",
                 
-                "3. Review code quality:",
+                "4. Review code quality with full context:",
+                "   - Use AST-based semantic search for precise analysis",
                 "   - Code style and consistency",
                 "   - Code smells and anti-patterns",
-                "   - Complexity and readability",
                 "   - Performance implications",
-                "   - Error handling and edge cases",
                 
-                "Always include CI analysis in your response, whether failures are found or not.",
+                "Always include repository analysis and CI analysis in your response.",
             ],
             tools=[
                 PythonTools(),
-                # PRTools(),
                 GithubTools( get_pull_requests= True, get_pull_request_changes= True, create_pull_request_comment= True ),
                 CITools(),
+                ASTRAGAnalysisTools(shared_analyzer=self.shared_analyzer),
+                # RepoAnalysisTools(),
                 ReasoningTools(add_instructions=True, think=True, analyze=True)
             ]
         )
@@ -116,17 +133,18 @@ class PRReviewPersona(BasePersona):
             instructions=[
                 "Monitor and analyze GitHub repository activities and changes",
                 "Fetch and process pull request data",
-                "Analyze code changes and provide structured feedback",
+                "Repository analyzed with AST parsing for precise code elements",
+                "Provide code context using semantic search analysis",
                 "Create a comment on a specific line of a specific file in a pull request.",
                 "Note: Requires a valid GitHub personal access token in GITHUB_ACCESS_TOKEN environment variable"
             ],
             tools=[
                 GithubTools( create_pull_request_comment= True, get_pull_requests= True, get_pull_request_changes= True),
-                # PRTools()
+                ASTRAGAnalysisTools(shared_analyzer=self.shared_analyzer)
+                # RepoAnalysisTools()
             ],
             markdown=True
         )
-
 
         pr_review_team = Team(
             name="pr-review-team",
@@ -140,9 +158,10 @@ class PRReviewPersona(BasePersona):
                 "Coordinate PR review process with specialized team members:",
                 
                 "1. Code Quality Analyst:",
-                "   - Review code structure and patterns",
+                "   - Repository analyzed with AST parsing, classes/functions stored separately",
+                "   - Review code structure using precise AST-based search",
                 "   - Check CI status and analyze any failures",
-                "   - Keep analysis focused and concise",
+                "   - Provide comprehensive analysis with codebase context",
                 
                 "2. Documentation Specialist:",
                 "   - Review documentation completeness",
@@ -153,7 +172,8 @@ class PRReviewPersona(BasePersona):
                 "   - Prioritize high-impact issues",
                 
                 "4. GitHub Specialist:",
-                "   - Manage repository operations",
+                "   - Repository analyzed with AST parsing for precise code retrieval",
+                "   - Provide deep code context using class/function-specific search",
                 "   - Keep PR metadata minimal",
                 
                 "5. Synthesize findings:",
@@ -169,6 +189,8 @@ class PRReviewPersona(BasePersona):
             add_datetime_to_instructions=True,
             tools=[
                 GithubTools( create_pull_request_comment= True, get_pull_requests= True, get_pull_request_changes= True),
+                ASTRAGAnalysisTools(shared_analyzer=self.shared_analyzer),
+                # RepoAnalysisTools(),
                 ReasoningTools(add_instructions=True, think=True, analyze=True)
             ]
         )
@@ -198,9 +220,10 @@ class PRReviewPersona(BasePersona):
         )
         
         system_prompt = PR_PROMPT_TEMPLATE.format_messages(**variables.model_dump())[0].content
-        # team = self.initialize_team(system_prompt)
         
         try:
+            self._auto_analyze_repo(message.body)
+            
             team = self.initialize_team(system_prompt)
             response = team.run(message.body, 
                               stream=False,
@@ -230,3 +253,46 @@ class PRReviewPersona(BasePersona):
             async def error_iterator():
                 yield error_message
             await self.stream_message(error_iterator())
+    
+    def _auto_analyze_repo(self, pr_text: str):
+        """Automatically extract repo URL and create knowledge graph/ RAG """
+        patterns = [
+            r'https://github\.com/([^/\s]+/[^/\s]+)',
+            r'github\.com/([^/\s]+/[^/\s]+)'
+        ]
+        
+        for pattern in patterns:
+            match = re.search(pattern, pr_text)
+            if match:
+                repo_path = match.group(1).rstrip('/')
+                repo_url = f"https://github.com/{repo_path}.git"
+                self._clone_and_analyze(repo_url)
+                break
+    
+    def _clone_and_analyze(self, repo_url: str):
+        """Clone repository and create RAG embeddings"""
+        import time
+        start_time = time.time()
+        
+        try:
+            temp_dir = tempfile.mkdtemp()
+            target_folder = os.path.join(temp_dir, "repo_analysis")
+            
+            clone_start = time.time()
+            subprocess.run(["git", "clone", repo_url, target_folder], check=True, capture_output=True)
+            clone_time = time.time() - clone_start
+            
+            from jupyter_ai_personas.knowledge_graph.ast_rag_analyzer import ASTRAGAnalyzer
+            self.shared_analyzer = ASTRAGAnalyzer()
+            
+            rag_start = time.time()
+            # analyzer = BulkCodeAnalyzer("neo4j://127.0.0.1:7687", ("neo4j", "Bhavana@97"))
+            # analyzer.analyze_folder(target_folder, clear_existing=True)
+            self.shared_analyzer.analyze_folder(target_folder)
+            rag_time = time.time() - rag_start
+            
+            total_time = time.time() - start_time
+            print(f"RAG Creation Times - Clone: {clone_time:.2f}s, Analysis: {rag_time:.2f}s, Total: {total_time:.2f}s")
+            
+        except Exception as e:
+            print(f"Error analyzing repository {repo_url}: {e}")
