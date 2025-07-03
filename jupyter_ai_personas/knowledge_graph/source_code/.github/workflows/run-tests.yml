@@ -26,11 +26,11 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install pytest pytest-asyncio pytest-tornado
-        pip install -e ".[pr_review]"
+        pip install pytest pytest-asyncio
+        pip install -e "."
         
     - name: Run tests
       run: |
-        python -m pytest tests/ -v
+        pytest $(find . -type d -name "test" -o -path "*/*/test_*.py" | tr '\n' ' ') -v --log-cli-level=INFO
       env:
         GITHUB_ACCESS_TOKEN: ${{ secrets.GITHUB_TOKEN }}
