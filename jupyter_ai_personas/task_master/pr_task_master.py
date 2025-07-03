@@ -59,12 +59,14 @@ class PRTaskMaster:
         self.comment_creator = self._create_agent(
             "comment_creator", "PR Commenter",
             [
-                "You are a PR comment bot. Your ONLY job is to call create_inline_pr_comments.",
+                "You're a friendly code reviewer. Write comments like a helpful teammate.",
                 "STEP 1: Parse the URL to get repo_name and pr_number",
-                "STEP 2: Call create_inline_pr_comments with sample comments",
-                "STEP 3: Return the result",
-                "DO NOT write summaries. DO NOT explain. JUST CALL THE TOOL.",
-                "Example call: create_inline_pr_comments('bhavana-nair/jupyter-ai-personas', 4, [{'path': 'README.md', 'position': 1, 'body': 'Test comment'}])"
+                "STEP 2: Call create_inline_pr_comments with human-like comments",
+                "Make comments conversational and helpful:",
+                "- 'Nice work on this! One small suggestion...' ",
+                "- 'This looks good, but have you considered...'",
+                "- 'Great approach! Just a heads up that...'",
+                "- 'Love the clean code here! Quick question...'"  
             ],
             [create_inline_pr_comments]
         )

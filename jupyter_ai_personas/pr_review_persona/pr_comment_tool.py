@@ -37,11 +37,12 @@ def create_inline_pr_comments(repo_name: str, pr_number: int, comments: List[Dic
         
         print(f"[DEBUG] About to create {len(comments)} inline comments")
         
-        # Skip summary comment for now to focus on inline comments
-        # summary = "# PR Review Summary\n\n"
-        # summary += "I've reviewed this PR and left inline comments on specific issues. "
-        # summary += "Please check the individual comments for details.\n"
-        # pr.create_issue_comment(summary)
+        # Create a summary comment first
+        summary = "## 👋 PR Review Complete!\n\n"
+        summary += "I've reviewed your changes and left some feedback inline. "
+        summary += f"Found {len(comments)} items to discuss. "
+        summary += "Check out the individual comments for details! ✨"
+        pr.create_issue_comment(summary)
         
         # Create all inline comments
         comment_urls = []
@@ -54,7 +55,7 @@ def create_inline_pr_comments(repo_name: str, pr_number: int, comments: List[Dic
             )
             comment_urls.append(comment.html_url)
         
-        return f"Created {len(comment_urls)} inline comments successfully"
+        return f"Posted review summary and {len(comment_urls)} inline comments"
     except GithubException as e:
         return f"Error: {str(e)}"
     except Exception as e:
