@@ -24,6 +24,10 @@ def create_inline_pr_comments(repo_name: str, pr_number: int, comments: List[Dic
         str: Success message with URLs of created comments or error.
     """
     print(f"[DEBUG] create_inline_pr_comments called with repo={repo_name}, pr={pr_number}, comments={len(comments) if comments else 0}")
+    if comments:
+        print(f"[DEBUG] First comment: {comments[0]}")
+    else:
+        print(f"[DEBUG] No comments provided - agent called tool with empty list")
     try:
         access_token = getenv("GITHUB_ACCESS_TOKEN")
         if not access_token:
@@ -37,23 +41,31 @@ def create_inline_pr_comments(repo_name: str, pr_number: int, comments: List[Dic
         
         print(f"[DEBUG] About to create {len(comments)} inline comments")
         
-        # Create a summary comment first
-        summary = "## 👋 PR Review Complete!\n\n"
-        summary += "I've reviewed your changes and left some feedback inline. "
-        summary += f"Found {len(comments)} items to discuss. "
-        summary += "Check out the individual comments for details! ✨"
-        pr.create_issue_comment(summary)
+        # Skip summary comment for now - focus on inline comments only
+        # summary = "## 👋 PR Review Complete!\n\n"
+        # summary += "I've reviewed your changes and left some feedback inline. "
+        # summary += f"Found {len(comments)} items to discuss. "
+        # summary += "Check out the individual comments for details! ✨"
+        # pr.create_issue_comment(summary)
         
         # Create all inline comments
         comment_urls = []
-        for comment_data in comments:
-            comment = pr.create_comment(
-                comment_data["body"],
-                commit,
-                comment_data["path"],
-                comment_data["position"]
-            )
-            comment_urls.append(comment.html_url)
+        for i, comment_data in enumerate(comments):
+            try:
+                print(f"[DEBUG] Creating comment {i+1}: path={comment_data.get('path')}, position={comment_data.get('position')}, body={comment_data.get('body')[:50]}...")
+                
+                # Use create_review_comment with correct parameters
+                comment = pr.create_review_comment(
+                    body=comment_data["body"],
+                    commit=commit,
+                    path=comment_data["path"],
+                    line=comment_data["position"]
+                )
+                comment_urls.append(comment.html_url)
+                print(f"[DEBUG] Comment {i+1} created successfully: {comment.html_url}")
+            except Exception as comment_error:
+                print(f"[DEBUG] Failed to create comment {i+1}: {str(comment_error)}")
+                continue
         
         return f"Posted review summary and {len(comment_urls)} inline comments"
     except GithubException as e:

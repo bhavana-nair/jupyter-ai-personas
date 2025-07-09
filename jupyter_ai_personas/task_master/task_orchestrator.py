@@ -76,17 +76,29 @@ class TaskOrchestrator:
             # Merge shared context with task context
             full_context = {**self.shared_context, **task.context}
             
-            # For comment creation task, include analysis results
+            # Smart context passing based on task type
+            input_text = full_context.get('input', '')
+            
             if task_id == "create_comments":
-                analysis_summary = "\n\nAnalysis Results:\n"
+                # Only include relevant findings for comments
+                findings = []
                 for dep_id in task.dependencies:
                     if f"{dep_id}_result" in self.shared_context:
-                        analysis_summary += f"\n{dep_id.upper()}:\n{self.shared_context[f'{dep_id}_result']}\n"
-                input_text = full_context.get('input', '') + analysis_summary
-            else:
-                input_text = full_context.get('input', '')
+                        result = self.shared_context[f'{dep_id}_result']
+                        # Extract key findings (first 200 chars of each result)
+                        summary = result[:200] + "..." if len(result) > 200 else result
+                        findings.append(f"{dep_id}: {summary}")
+                
+                if findings:
+                    input_text += "\n\nKey Findings:\n" + "\n".join(findings)
             
-            print(f"[DEBUG] Executing task {task_id} with input: {input_text[:100]}...")
+            elif len(task.dependencies) > 0:
+                # For other dependent tasks, include minimal context
+                for dep_id in task.dependencies:
+                    if f"{dep_id}_result" in self.shared_context:
+                        input_text += f"\n\n{dep_id} completed successfully."
+            
+            print(f"[DEBUG] Executing task {task_id}")
             
             result = await task.agent.arun(input_text)
             
@@ -96,7 +108,7 @@ class TaskOrchestrator:
             else:
                 content = str(result)
             
-            print(f"[DEBUG] Task {task_id} result type: {type(result)}, content length: {len(content) if content else 0}")
+            print(f"[DEBUG] Task {task_id} completed with content length: {len(content)}")
             
             task.result = content
             task.status = TaskStatus.COMPLETED
@@ -115,6 +127,7 @@ class TaskOrchestrator:
     async def execute_all(self) -> Dict[str, Any]:
         results = {}
         
+        # Simple sequential execution for now to fix the issue
         for task_id in self.execution_order:
             task = self.tasks[task_id]
             if task.status == TaskStatus.PENDING:
