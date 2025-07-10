@@ -14,8 +14,8 @@ from langchain_core.messages import HumanMessage
 from agno.tools.python import PythonTools
 from agno.team.team import Team
 from .ci_tools import CITools
-from jupyter_ai_personas.knowledge_graph.ast_rag_tools import ASTRAGAnalysisTools
-# from .repo_analysis_tools import RepoAnalysisTools
+# from jupyter_ai_personas.knowledge_graph.ast_rag_tools import ASTRAGAnalysisTools
+from .repo_analysis_tools import RepoAnalysisTools
 from .template import PRPersonaVariables, PR_PROMPT_TEMPLATE
 import sys
 sys.path.append('../knowledge_graph')
@@ -53,39 +53,65 @@ class PRReviewPersona(BasePersona):
             ),
             markdown=True,
             instructions=[
-                "You have access to CITools for analyzing CI failures and ASTRAGAnalysisTools for deep code analysis. Always:",
+                "MANDATORY PR REVIEW WORKFLOW - You MUST follow these steps in order:",
                 
-                "1. Get repository and PR information:",
+                "STEP 1 - Get PR Information (MANDATORY - NO EXCEPTIONS):",
                 "   - Extract repo URL and PR number from the request",
+                "   - IMMEDIATELY call get_pull_request_changes(repo_url, pr_number)",
+                "   - NEVER proceed without actual PR diff data",
+                "   - NEVER make assumptions about PR content",
+                "   - NEVER fabricate or guess what the PR contains",
+                "   - Parse the ACTUAL diff to identify modified functions and classes",
                 "   - Use GithubTools to fetch PR details",
+                "   - SHOW the actual PR diff in your response as evidence",
                 
-                "2. Repository analysis (already completed):",
-                "   - Classes and functions stored separately with AST parsing",
-                "   - Use search_code to find relevant code chunks",
-                "   - Use search_classes to find specific classes",
-                "   - Use search_functions to find specific functions",
-                "   - Use get_function_source/get_class_source for exact retrieval",
-                "   - Search using natural language queries with precise results",
-                "   - Analyze affected functions and classes in the PR",
+                "STEP 2 - MANDATORY KG Analysis for EVERY changed file:",
                 
-                "3. Check CI failures using CITools:",
+                "   - For EACH file in PR diff, you MUST run these KG queries:",
+                "     a) query_codebase: MATCH (n) WHERE n.file CONTAINS 'filename' RETURN n.name, n.type",
+                "     b) For each modified function: get_function_source(function_name)",
+                "     c) For each modified class: find_class_relationships(class_name)",
+                "   - For NEW files: MUST search for similar patterns with CONTAINS queries",
+                "   - For MODIFIED files: MUST get current implementation before reviewing changes",
+                "   - NEVER skip KG analysis - even if file seems simple",
+                "   - ONLY use properties: 'name', 'file', 'code', 'parameters'",
+                
+                "STEP 3 - Query Generation & Context Analysis (REQUIRED):",
+                
+                "   - FIRST: Describe the changes to the Query Generation Agent",
+                "   - REQUEST: FOCUSED KG queries limited to PR scope",
+                "   - EXECUTE: Only targeted queries, avoid system-wide searches",
+                "   - CHECK DEPENDENCIES: Use check_dependents_handled for each modified function/class",
+                "   - ANALYZE: Results within the context of actual changes",
+                "   - The Query Agent will provide specialized Cypher queries based on:",
+                "     * Change type (class/function/interface/utility)",
+                "     * Risk level (high-impact vs isolated changes)",
+                "     * Relationship patterns (inheritance/calls/dependencies)",
+                
+                "STEP 4 - CI Analysis (REQUIRED):",
                 "   - Call fetch_ci_failure_data with repo_url and pr_number",
                 "   - Use get_ci_logs to analyze any failures found",
                 
-                "4. Review code quality with full context:",
-                "   - Use AST-based semantic search for precise analysis",
+                "STEP 5 - Final Review (REQUIRED):",
+                "   - Synthesize KG insights with PR changes",
+                "   - HIGHLIGHT unhandled dependencies as critical issues",
                 "   - Code style and consistency",
                 "   - Code smells and anti-patterns",
                 "   - Performance implications",
                 
-                "Always include repository analysis and CI analysis in your response.",
+                "CRITICAL REQUIREMENTS:",
+                "- NEVER review without actual PR data",
+                "- NEVER make up PR content or changes",
+                "- ALWAYS show actual diff data as evidence",
+                "- FAILURE TO FETCH REAL PR DATA = INVALID REVIEW",
+                "- You MUST show evidence of KG queries for each changed file",
             ],
             tools=[
                 PythonTools(),
                 GithubTools( get_pull_requests= True, get_pull_request_changes= True, create_pull_request_comment= True ),
                 CITools(),
-                ASTRAGAnalysisTools(shared_analyzer=self.shared_analyzer),
-                # RepoAnalysisTools(),
+                # ASTRAGAnalysisTools(shared_analyzer=self.shared_analyzer),
+                RepoAnalysisTools(),
                 ReasoningTools(add_instructions=True, think=True, analyze=True)
             ]
         )
@@ -133,23 +159,72 @@ class PRReviewPersona(BasePersona):
             instructions=[
                 "Monitor and analyze GitHub repository activities and changes",
                 "Fetch and process pull request data",
-                "Repository analyzed with AST parsing for precise code elements",
-                "Provide code context using semantic search analysis",
+                "Repository analyzed with knowledge graph for code relationships",
+                "Provide code context using graph-based analysis",
                 "Create a comment on a specific line of a specific file in a pull request.",
                 "Note: Requires a valid GitHub personal access token in GITHUB_ACCESS_TOKEN environment variable"
             ],
             tools=[
                 GithubTools( create_pull_request_comment= True, get_pull_requests= True, get_pull_request_changes= True),
-                ASTRAGAnalysisTools(shared_analyzer=self.shared_analyzer)
-                # RepoAnalysisTools()
+                # ASTRAGAnalysisTools(shared_analyzer=self.shared_analyzer)
+                RepoAnalysisTools()
             ],
             markdown=True
         )
 
+        # Create Query Generation Agent
+        query_generator = Agent(name="query_generator",
+            role="KG Query Specialist",
+            model=AwsBedrock(
+                id=model_id,
+                session=session
+            ),
+            instructions=[
+                "You are a Neo4j Cypher query generation specialist for code analysis.",
+                
+                "SCHEMA KNOWLEDGE:",
+                "- Nodes: Class, Function, File",
+                "- Relationships: INHERITS_FROM, CONTAINS, CALLS",
+                "- Properties: name, file, code, parameters, line_start, line_end",
+                
+                "QUERY GENERATION RULES - STAY FOCUSED:",
+                "1. ONLY query for DIRECT dependencies of changed code",
+                "2. LIMIT scope to 1-2 levels of relationships maximum",
+                "3. For CLASS changes: Only immediate children, not entire hierarchy",
+                "4. For FUNCTION changes: Only direct callers, not call chains",
+                "5. For NEW files: Only check naming conflicts in same module",
+                "6. AVOID deep traversals like [:CALLS*] or [:INHERITS_FROM*]",
+                "7. CONSTRAIN queries with file path filters when possible",
+                
+                "FOCUSED CHANGE PATTERNS:",
+                "- Parent class modified → Find DIRECT children only",
+                "- Function changed → Find DIRECT callers in same module",
+                "- New file added → Check conflicts in same directory",
+                "- Method signature changed → Check overrides in direct subclasses",
+                
+                "SCOPE LIMITATIONS:",
+                "- NO system-wide searches",
+                "- NO deep relationship traversals",
+                "- PREFER file-path constraints",
+                "- LIMIT results to 10-20 items maximum",
+                
+                "EXAMPLE FOCUSED QUERIES:",
+                "- MATCH (child:Class)-[:INHERITS_FROM]->(parent:Class {name: 'PRPersona'}) RETURN child.name LIMIT 5",
+                "- MATCH (f:Function)-[:CALLS]->(target:Function {name: 'process_message'}) WHERE f.file CONTAINS 'persona' RETURN f.name LIMIT 10",
+                "- MATCH (n) WHERE n.file CONTAINS 'pr_review' AND n.name CONTAINS 'new_function' RETURN n.name",
+                
+                "OUTPUT FORMAT:",
+                "Return a JSON array of FOCUSED queries:",
+                "[{\"query\": \"MATCH...\", \"purpose\": \"Find direct children\", \"scope\": \"limited\"}]"
+            ],
+            tools=[RepoAnalysisTools()],
+            markdown=False
+        )
+        
         pr_review_team = Team(
             name="pr-review-team",
             mode="coordinate",
-            members=[code_quality, documentation_checker, security_checker, gitHub],
+            members=[query_generator, code_quality, documentation_checker, security_checker, gitHub],
             model=AwsBedrock(
                 id=model_id,
                 session=session
@@ -157,26 +232,36 @@ class PRReviewPersona(BasePersona):
             instructions=[
                 "Coordinate PR review process with specialized team members:",
                 
-                "1. Code Quality Analyst:",
-                "   - Repository analyzed with AST parsing, classes/functions stored separately",
-                "   - Review code structure using precise AST-based search",
+                "1. Query Generator:",
+                "   - WAIT for GitHub Specialist to provide ACTUAL PR diff data",
+                "   - Generate queries ONLY based on real changes from diff",
+                "   - NEVER generate queries based on assumptions",
+                "   - Provide query recommendations to other team members",
+                
+                "2. Code Quality Analyst:",
+                "   - MUST execute KG queries for EVERY file in PR diff",
+                "   - MUST show query results in response as evidence",
+                "   - MUST analyze relationships and dependencies",
                 "   - Check CI status and analyze any failures",
                 "   - Provide comprehensive analysis with codebase context",
                 
-                "2. Documentation Specialist:",
+                "3. Documentation Specialist:",
                 "   - Review documentation completeness",
                 "   - Focus on critical documentation issues",
                 
-                "3. Security Analyst:",
+                "4. Security Analyst:",
                 "   - Check for security vulnerabilities",
                 "   - Prioritize high-impact issues",
                 
-                "4. GitHub Specialist:",
-                "   - Repository analyzed with AST parsing for precise code retrieval",
-                "   - Provide deep code context using class/function-specific search",
+                "5. GitHub Specialist:",
+                "   - FIRST ACTION: Call get_pull_request_changes() with actual repo URL and PR number",
+                "   - VERIFY: Show actual PR diff data in response",
+                "   - NEVER proceed without real GitHub data",
+                "   - MUST run KG queries for each changed file from ACTUAL diff",
+                "   - Provide deep code context using graph traversal and queries",
                 "   - Keep PR metadata minimal",
                 
-                "5. Synthesize findings:",
+                "6. Synthesize findings:",
                 "   - Combine key insights from all members",
                 "   - Focus on actionable items",
                 "   - Keep responses concise",
@@ -189,8 +274,8 @@ class PRReviewPersona(BasePersona):
             add_datetime_to_instructions=True,
             tools=[
                 GithubTools( create_pull_request_comment= True, get_pull_requests= True, get_pull_request_changes= True),
-                ASTRAGAnalysisTools(shared_analyzer=self.shared_analyzer),
-                # RepoAnalysisTools(),
+                # ASTRAGAnalysisTools(shared_analyzer=self.shared_analyzer),
+                RepoAnalysisTools(),
                 ReasoningTools(add_instructions=True, think=True, analyze=True)
             ]
         )
@@ -282,17 +367,17 @@ class PRReviewPersona(BasePersona):
             subprocess.run(["git", "clone", repo_url, target_folder], check=True, capture_output=True)
             clone_time = time.time() - clone_start
             
-            from jupyter_ai_personas.knowledge_graph.ast_rag_analyzer import ASTRAGAnalyzer
-            self.shared_analyzer = ASTRAGAnalyzer()
+            # from jupyter_ai_personas.knowledge_graph.ast_rag_analyzer import ASTRAGAnalyzer
+            # self.shared_analyzer = ASTRAGAnalyzer()
             
-            rag_start = time.time()
-            # analyzer = BulkCodeAnalyzer("neo4j://127.0.0.1:7687", ("neo4j", "Bhavana@97"))
-            # analyzer.analyze_folder(target_folder, clear_existing=True)
-            self.shared_analyzer.analyze_folder(target_folder)
-            rag_time = time.time() - rag_start
+            kg_start = time.time()
+            analyzer = BulkCodeAnalyzer("neo4j://127.0.0.1:7687", ("neo4j", "Bhavana@97"))
+            analyzer.analyze_folder(target_folder, clear_existing=True)
+            # self.shared_analyzer.analyze_folder(target_folder)
+            kg_time = time.time() - kg_start
             
             total_time = time.time() - start_time
-            print(f"RAG Creation Times - Clone: {clone_time:.2f}s, Analysis: {rag_time:.2f}s, Total: {total_time:.2f}s")
+            print(f"KG Creation Times - Clone: {clone_time:.2f}s, Analysis: {kg_time:.2f}s, Total: {total_time:.2f}s")
             
         except Exception as e:
             print(f"Error analyzing repository {repo_url}: {e}")
