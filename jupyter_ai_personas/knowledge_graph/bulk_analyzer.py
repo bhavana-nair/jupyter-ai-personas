@@ -168,41 +168,59 @@ class BulkCodeAnalyzer:
     
     def _analyze_non_python_file(self, file_path, session):
         """Analyze non-Python files (basic content indexing)"""
+        logger.info(f'Analyzing non-Python file: {file_path}')
+
         try:
             # Validate and normalize file path
-        file_path = os.path.abspath(os.path.normpath(file_path))
-        base_dir = os.path.abspath(os.getcwd())
-        
-        # Prevent directory traversal
-        if not file_path.startswith(base_dir):
-            raise ValueError('File path must be within current working directory')
+            file_path = os.path.abspath(os.path.normpath(file_path))
+            base_dir = os.path.abspath(os.getcwd())
             
-        if not os.path.exists(file_path):
-            raise FileNotFoundError(f'File not found: {file_path}')
+            # Security: Prevent directory traversal
+            if not file_path.startswith(base_dir):
+                logger.error(f'Path traversal attempt blocked: {file_path}')
+                raise ValueError('File path must be within current working directory')
+                
+            if not os.path.exists(file_path):
+                logger.error(f'File not found: {file_path}')
+                raise FileNotFoundError(f'File not found: {file_path}')
             
-        try:
-            with open(file_path, 'r', encoding='utf-8') as f:
-                content = f.read()
-            
-            # Create a File node for non-Python files
-            session.run(
-                "MERGE (f:File {path: $path}) SET f.content = $content, f.size = $size, f.type = $type",
-                path=file_path, 
-                content=content[:5000],  # Limit content size
-                size=len(content),
-                type=os.path.splitext(file_path)[1]
-            )
-            
+            # Read and process file
+            logger.debug(f'Reading file: {file_path}')
+            try:
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                
+                file_type = os.path.splitext(file_path)[1]
+                logger.info(f'Processing {file_type} file of size {len(content)} bytes')
+                
+                # Create a File node with limited content size
+                session.run(
+                    "MERGE (f:File {path: $path}) SET f.content = $content, f.size = $size, f.type = $type",
+                    path=file_path, 
+                    content=content[:5000],  # Limit content size for storage efficiency
+                    size=len(content),
+                    type=file_type
+                )
+                logger.debug(f'Successfully created File node for {file_path}')
+                
+            except Exception as e:
+                # Handle file processing errors
+                logger.error(f'Error processing {file_path}: {str(e)}', exc_info=True)
+                
+                # Create File node with error state for traceability
+                session.run(
+                    "MERGE (f:File {path: $path}) SET f.error = $error, f.type = $type, f.status = 'error'",
+                    path=file_path,
+                    error=str(e),
+                    type=os.path.splitext(file_path)[1]
+                )
+                logger.info(f'Created error state node for {file_path}')
+                raise  # Re-raise for proper error propagation
+                
         except Exception as e:
-            logger.error(f"Error reading {file_path}: {e}", exc_info=True)
-            # Create File node without content
-            logger.debug(f"Creating file node with error state for {file_path}")
-            session.run(
-                "MERGE (f:File {path: $path}) SET f.error = $error, f.type = $type",
-                path=file_path,
-                error=str(e),
-                type=os.path.splitext(file_path)[1]
-            )
+            # Handle validation errors
+            logger.error(f'Validation error for {file_path}: {str(e)}', exc_info=True)
+            raise
     
     def _extract_function_calls(self, func_node, session, caller_name, file_path):
         """Extract function calls from a function body"""
