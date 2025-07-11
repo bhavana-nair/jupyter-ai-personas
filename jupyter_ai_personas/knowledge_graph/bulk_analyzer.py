@@ -5,10 +5,20 @@ from neo4j import GraphDatabase
 import hashlib
 
 class BulkCodeAnalyzer:
-    def __init__(self, uri, auth):
-        self.driver = GraphDatabase.driver(uri, auth=auth)
-        self.PY_LANGUAGE = Language(tspython.language())
-        self.parser = Parser(self.PY_LANGUAGE)
+    def __init__(self, uri=None, auth=None):
+        # Use environment variables for credentials if not provided
+        self.uri = uri or os.getenv('NEO4J_URI', 'neo4j://localhost:7687')
+        self.auth = auth or (os.getenv('NEO4J_USER', 'neo4j'), os.getenv('NEO4J_PASSWORD'))
+        
+        if not self.auth[1]:
+            raise ValueError('Database password must be provided via NEO4J_PASSWORD environment variable')
+        
+        try:
+            self.driver = GraphDatabase.driver(self.uri, auth=self.auth)
+            self.PY_LANGUAGE = Language(tspython.language())
+            self.parser = Parser(self.PY_LANGUAGE)
+        except Exception as e:
+            raise ConnectionError(f'Failed to connect to Neo4j database: {str(e)}')
     
     def analyze_folder(self, folder_path, clear_existing=False):
         """Analyze all supported files in a folder and add to knowledge graph"""
