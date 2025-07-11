@@ -30,20 +30,34 @@ logger.addHandler(file_handler)
 
 class BulkCodeAnalyzer:
     def __init__(self, uri=None, auth=None):
-        # Use environment variables for credentials if not provided
+        # Use environment variables with secure credential handling
         self.uri = uri or os.getenv('NEO4J_URI', 'neo4j://localhost:7687')
         neo4j_user = os.getenv('NEO4J_USER', 'neo4j')
         neo4j_password = os.getenv('NEO4J_PASSWORD')
         self.auth = auth or (neo4j_user, neo4j_password)
         
+        # Validate required credentials
         if not self.auth[1]:
+            logger.error('NEO4J_PASSWORD environment variable not set')
             raise ValueError('Database password must be provided via NEO4J_PASSWORD environment variable')
         
         try:
+            # Initialize database connection
+            logger.info(f'Connecting to Neo4j database at {self.uri}')
             self.driver = GraphDatabase.driver(self.uri, auth=self.auth)
+            
+            # Test connection
+            with self.driver.session() as session:
+                session.run("MATCH () RETURN 1 LIMIT 1")
+            logger.info('Successfully connected to Neo4j database')
+            
+            # Initialize parser
             self.PY_LANGUAGE = Language(tspython.language())
             self.parser = Parser(self.PY_LANGUAGE)
+            logger.debug('Tree-sitter parser initialized')
+            
         except Exception as e:
+            logger.error(f'Failed to connect to Neo4j database: {str(e)}', exc_info=True)
             raise ConnectionError(f'Failed to connect to Neo4j database: {str(e)}')
     
     def analyze_folder(self, folder_path, clear_existing=False):
