@@ -72,23 +72,43 @@ class EmojiPersona(BasePersona):
         )
 
     async def process_message(self, message: Message):
-        provider_name = self.config.lm_provider.name
-        model_id = self.config.lm_provider_params["model_id"]
-
-        runnable = self.build_runnable()
-        variables = JupyternautVariables(
-            input=message.body,
-            model_id=model_id,
-            provider_name=provider_name,
-            persona_name=self.name,
-        )
-
-        variables_dict = variables.model_dump()
-        reply = runnable.invoke(variables_dict)
-        print(f"reply from model: {reply}")
-        reply = emoji.emojize(reply, variant="emoji_type")
-        print(f"reply after emojize: {reply}")
-        self.send_message(reply)
+        try:
+            provider_name = self.config.lm_provider.name
+            model_id = self.config.lm_provider_params["model_id"]
+            
+            # Use context manager for YChatHistory
+            async with YChatHistory(ychat=self.ychat, k=2) as history:
+                runnable = self.build_runnable()
+                variables = JupyternautVariables(
+                    input=message.body,
+                    model_id=model_id,
+                    provider_name=provider_name,
+                    persona_name=self.name,
+                )
+                
+                try:
+                    variables_dict = variables.model_dump()
+                    reply = runnable.invoke(variables_dict)
+                    print(f"reply from model: {reply}")
+                    
+                    # Handle potential emoji conversion errors
+                    try:
+                        reply = emoji.emojize(reply, variant="emoji_type")
+                        print(f"reply after emojize: {reply}")
+                    except Exception as e:
+                        logger.error(f"Error converting emojis: {str(e)}")
+                        # Fall back to original reply if emoji conversion fails
+                    
+                    await self.send_message(reply)
+                    
+                except Exception as e:
+                    error_msg = f"Error processing message: {str(e)}"
+                    logger.error(error_msg)
+                    await self.send_message(error_msg)
+                
+        except Exception as e:
+            logger.error(f"Fatal error in process_message: {str(e)}")
+            raise
 
     def build_runnable(self) -> Any:
         llm = self.config.lm_provider(**self.config.lm_provider_params)
