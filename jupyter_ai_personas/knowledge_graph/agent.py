@@ -21,7 +21,7 @@ def main():
         show_tool_calls=True,
         model=Gemini(
             id="gemini-2.5-pro",
-            api_key="AIzaSyCkD-2rU7O2Ubsf_iXV9rOZ2fmatZ5IxSA"
+            api_key=os.getenv('GOOGLE_API_KEY')
         )
     )
     result = agent.run("Get the source code of process_message function in SoftwareTeamPersona class")
