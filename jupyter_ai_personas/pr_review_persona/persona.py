@@ -282,7 +282,8 @@ class PRReviewPersona(BasePersona):
 
         return pr_review_team
 
-    async def process_message(self, message: Message):
+    async def _setup_message_context(self, message: Message):
+        """Set up message context and variables"""
         provider_name = self.config.lm_provider.name
         model_id = self.config.lm_provider_params["model_id"]
 
@@ -304,40 +305,51 @@ class PRReviewPersona(BasePersona):
             context=history_text
         )
         
-        system_prompt = PR_PROMPT_TEMPLATE.format_messages(**variables.model_dump())[0].content
-        
-        try:
-            self._auto_analyze_repo(message.body)
-            
-            team = self.initialize_team(system_prompt)
-            response = team.run(message.body, 
-                              stream=False,
-                              stream_intermediate_steps=True,
-                              show_full_reasoning=True)
+        return variables, PR_PROMPT_TEMPLATE.format_messages(**variables.model_dump())[0].content
 
-            response = response.content
-            async def response_iterator():
-                yield response
+    async def _execute_team_review(self, message: Message, system_prompt: str) -> str:
+        """Execute the team review process"""
+        self._auto_analyze_repo(message.body)
+        team = self.initialize_team(system_prompt)
+        response = team.run(
+            message.body, 
+            stream=False,
+            stream_intermediate_steps=True,
+            show_full_reasoning=True
+        )
+        return response.content
+
+    async def _handle_errors(self, e: Exception) -> str:
+        """Generate appropriate error messages based on exception type"""
+        if isinstance(e, ValueError):
+            return f"Configuration Error: {str(e)}\nThis may be due to missing or invalid environment variables, model configuration, or input parameters."
+        elif isinstance(e, boto3.exceptions.Boto3Error):
+            return f"AWS Connection Error: {str(e)}\nThis may be due to invalid AWS credentials or network connectivity issues."
+        else:
+            return f"PR Review Error ({type(e).__name__}): {str(e)}\nAn unexpected error occurred while the PR review team was analyzing your request."
+
+    async def _stream_response(self, content: str):
+        """Stream response content"""
+        async def response_iterator():
+            yield content
+        await self.stream_message(response_iterator())
+
+    async def process_message(self, message: Message):
+        """Process incoming messages and coordinate review team"""
+        try:
+            # Set up context
+            variables, system_prompt = await self._setup_message_context(message)
             
-            await self.stream_message(response_iterator())
+            # Execute review
+            response = await self._execute_team_review(message, system_prompt)
             
-        except ValueError as e:
-            error_message = f"Configuration Error: {str(e)}\nThis may be due to missing or invalid environment variables, model configuration, or input parameters."
-            async def error_iterator():
-                yield error_message
-            await self.stream_message(error_iterator())
-            
-        except boto3.exceptions.Boto3Error as e:
-            error_message = f"AWS Connection Error: {str(e)}\nThis may be due to invalid AWS credentials or network connectivity issues."
-            async def error_iterator():
-                yield error_message
-            await self.stream_message(error_iterator())
+            # Stream success response
+            await self._stream_response(response)
             
         except Exception as e:
-            error_message = f"PR Review Error ({type(e).__name__}): {str(e)}\nAn unexpected error occurred while the PR review team was analyzing your request."
-            async def error_iterator():
-                yield error_message
-            await self.stream_message(error_iterator())
+            # Handle and stream error response
+            error_message = await self._handle_errors(e)
+            await self._stream_response(error_message)
     
     def _auto_analyze_repo(self, pr_text: str):
         """Automatically extract repo URL and create knowledge graph/ RAG """
