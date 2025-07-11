@@ -8,7 +8,9 @@ class BulkCodeAnalyzer:
     def __init__(self, uri=None, auth=None):
         # Use environment variables for credentials if not provided
         self.uri = uri or os.getenv('NEO4J_URI', 'neo4j://localhost:7687')
-        self.auth = auth or (os.getenv('NEO4J_USER', 'neo4j'), os.getenv('NEO4J_PASSWORD'))
+        neo4j_user = os.getenv('NEO4J_USER', 'neo4j')
+        neo4j_password = os.getenv('NEO4J_PASSWORD')
+        self.auth = auth or (neo4j_user, neo4j_password)
         
         if not self.auth[1]:
             raise ValueError('Database password must be provided via NEO4J_PASSWORD environment variable')
