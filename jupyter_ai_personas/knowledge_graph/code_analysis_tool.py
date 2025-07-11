@@ -7,7 +7,15 @@ import os
 class CodeAnalysisTool(Toolkit):
     def __init__(self):
         super().__init__(name="code_analysis")
-        self.driver = GraphDatabase.driver("neo4j://127.0.0.1:7687", auth=("neo4j", "Bhavana@97"))
+        # Use environment variables for Neo4j credentials with defaults
+        neo4j_uri = os.getenv('NEO4J_URI', 'neo4j://localhost:7687')
+        neo4j_user = os.getenv('NEO4J_USER', 'neo4j')
+        neo4j_password = os.getenv('NEO4J_PASSWORD')
+        
+        if not neo4j_password:
+            raise ValueError('NEO4J_PASSWORD environment variable must be set')
+            
+        self.driver = GraphDatabase.driver(neo4j_uri, auth=(neo4j_user, neo4j_password))
         self.register(self.get_class_info)
         self.register(self.find_related_classes)
         self.register(self.query_code)
