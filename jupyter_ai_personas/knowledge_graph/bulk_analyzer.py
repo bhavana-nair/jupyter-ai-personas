@@ -51,7 +51,19 @@ class BulkCodeAnalyzer:
                     print(f"Error analyzing {file_path}: {e}")
     
     def _analyze_file(self, file_path, session):
-        with open(file_path, 'r', encoding='utf-8') as f:
+        # Validate and normalize file path
+        file_path = os.path.abspath(os.path.normpath(file_path))
+        base_dir = os.path.abspath(os.getcwd())
+        
+        # Prevent directory traversal
+        if not file_path.startswith(base_dir):
+            raise ValueError('File path must be within current working directory')
+            
+        if not os.path.exists(file_path):
+            raise FileNotFoundError(f'File not found: {file_path}')
+            
+        try:
+            with open(file_path, 'r', encoding='utf-8') as f:
             code = f.read()
         
         tree = self.parser.parse(bytes(code, 'utf8'))
@@ -116,6 +128,18 @@ class BulkCodeAnalyzer:
     
     def _analyze_non_python_file(self, file_path, session):
         """Analyze non-Python files (basic content indexing)"""
+        try:
+            # Validate and normalize file path
+        file_path = os.path.abspath(os.path.normpath(file_path))
+        base_dir = os.path.abspath(os.getcwd())
+        
+        # Prevent directory traversal
+        if not file_path.startswith(base_dir):
+            raise ValueError('File path must be within current working directory')
+            
+        if not os.path.exists(file_path):
+            raise FileNotFoundError(f'File not found: {file_path}')
+            
         try:
             with open(file_path, 'r', encoding='utf-8') as f:
                 content = f.read()
