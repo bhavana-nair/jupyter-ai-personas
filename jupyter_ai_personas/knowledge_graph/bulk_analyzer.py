@@ -221,6 +221,3 @@ class BulkCodeAnalyzer:
                 caller=caller_name, called=called_func, file=file_path
             )
 
-
-# analyzer = BulkCodeAnalyzer("neo4j://127.0.0.1:7687", ("neo4j", "Bhavana@97"))
-# analyzer.analyze_folder("source_code", clear_existing=True)
