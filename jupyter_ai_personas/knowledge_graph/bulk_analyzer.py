@@ -180,8 +180,9 @@ class BulkCodeAnalyzer:
             )
             
         except Exception as e:
-            print(f"Error reading {file_path}: {e}")
+            logger.error(f"Error reading {file_path}: {e}", exc_info=True)
             # Create File node without content
+            logger.debug(f"Creating file node with error state for {file_path}")
             session.run(
                 "MERGE (f:File {path: $path}) SET f.error = $error, f.type = $type",
                 path=file_path,
