@@ -16,6 +16,36 @@ class ASTRAGAnalyzer:
         self.parser = Parser(self.PY_LANGUAGE)
         
     def analyze_folder(self, folder_path):
+        """Analyze all .py files and create vector store"""
+        try:
+            documents = []
+            
+            # Validate folder path
+            folder_path = os.path.abspath(os.path.normpath(folder_path))
+            if not os.path.isdir(folder_path):
+                raise NotADirectoryError(f'Invalid folder path: {folder_path}')
+            
+            for root, dirs, files in os.walk(folder_path):
+                for file in files:
+                    if file.endswith('.py'):
+                        file_path = os.path.join(root, file)
+                        try:
+                            documents.extend(self._process_file(file_path))
+                        except Exception as e:
+                            logger.error(f'Error processing file {file_path}: {str(e)}')
+                            continue
+            
+            if documents:
+                try:
+                    self.vectorstore = FAISS.from_documents(documents, self.embeddings)
+                    print(f'Created vector store with {len(documents)} chunks')
+                except Exception as e:
+                    logger.error(f'Error creating vector store: {str(e)}')
+                    raise
+            
+        except Exception as e:
+            logger.error(f'Error analyzing folder {folder_path}: {str(e)}')
+            raise
         """Analyze all .py files and create vector store with separate class/function documents"""
         documents = []
         
