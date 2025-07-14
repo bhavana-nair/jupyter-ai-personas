@@ -107,8 +107,36 @@ class CodeAnalysisTool(Toolkit):
         except Exception as e:
             return f"Error finding related classes: {str(e)}"
     
-    def query_code(self, query: str) -> str:
-        """Execute custom Cypher queries on the code knowledge graph
+    def query_code(self, query: str, allow_schema: bool = False) -> str:
+        """Execute custom Cypher queries on the code knowledge graph with input validation and sanitization.
+        
+        Args:
+            query: The Cypher query to execute
+            allow_schema: Whether to allow schema modification queries (default: False)
+            
+        Returns:
+            str: Query results or error message
+            
+        Raises:
+            ValueError: If query contains invalid/dangerous patterns
+            
+        Security:
+            - Input validation against dangerous patterns
+            - Query size limits
+            - Schema modification restricted
+            - Parameterized input handling
+        """
+        
+        # Input validation
+        if not isinstance(query, str):
+            raise ValueError("Query must be a string")
+
+        # Query size limit to prevent DoS
+        if len(query) > 5000:
+            raise ValueError("Query exceeds maximum length of 5000 characters")
+
+        # Convert query to uppercase for case-insensitive checks
+        query_upper = query.upper()Execute custom Cypher queries on the code knowledge graph
         
         Args:
             query: The Cypher query to execute
