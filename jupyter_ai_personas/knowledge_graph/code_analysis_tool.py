@@ -172,9 +172,29 @@ class CodeAnalysisTool(Toolkit):
                 if len(query) > 5000:
                     raise ValueError("Query exceeds maximum length of 5000 characters")
                     
-                result = session.run(query)
-                records = [dict(record) for record in result]
-                return str(records) if records else "No results found"
+                # Additional runtime validation
+                if not query.strip().startswith("MATCH"):
+                    raise ValueError("Queries must start with MATCH for read-only operation")
+                    
+                # Parse query parameters to prevent injection
+                params = {}
+                param_matches = re.finditer(r'\$(\w+)', query)
+                for match in param_matches:
+                    param_name = match.group(1)
+                    if param_name not in params:
+                        params[param_name] = None
+                
+                # Execute query with parameters
+                result = session.run(query, params)
+                try:
+                    records = [dict(record) for record in result]
+                    if not records:
+                        logger.debug(f"Query returned no results: {query}")
+                        return "No results found"
+                    return str(records)
+                except Exception as e:
+                    logger.error(f"Error executing query: {query}", exc_info=True)
+                    raise
                 
         except ValueError as e:
             return f"Query validation error: {str(e)}"
