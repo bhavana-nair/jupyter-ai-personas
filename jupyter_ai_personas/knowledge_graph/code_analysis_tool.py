@@ -108,11 +108,47 @@ class CodeAnalysisTool(Toolkit):
             return f"Error finding related classes: {str(e)}"
     
     def query_code(self, query: str) -> str:
-        """Execute custom Cypher queries on the code knowledge graph"""
+        """Execute custom Cypher queries on the code knowledge graph
+        
+        Args:
+            query: The Cypher query to execute
+            
+        Returns:
+            str: Query results or error message
+            
+        Raises:
+            ValueError: If query contains invalid/dangerous patterns
+        """
         try:
+            # Validate query before execution
+            dangerous_patterns = [
+                "LOAD CSV",
+                "CALL apoc",
+                "CALL db.labels",
+                "CALL db.constraints",
+                "CREATE INDEX",
+                "DROP",
+                "REMOVE",
+                "SET password",
+                "WITH *"
+            ]
+            
+            # Convert query to uppercase for case-insensitive checks
+            query_upper = query.upper()
+            for pattern in dangerous_patterns:
+                if pattern.upper() in query_upper:
+                    raise ValueError(f"Query contains potentially dangerous pattern: {pattern}")
+            
             with self.driver.session() as session:
+                # Enforce query size limit
+                if len(query) > 5000:
+                    raise ValueError("Query exceeds maximum length of 5000 characters")
+                    
                 result = session.run(query)
                 records = [dict(record) for record in result]
                 return str(records) if records else "No results found"
+                
+        except ValueError as e:
+            return f"Query validation error: {str(e)}"
         except Exception as e:
-            return f"Query error: {str(e)}"
+            return f"Query execution error: {str(e)}"
