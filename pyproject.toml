@@ -55,7 +55,13 @@ pr_review = [
     "tree-sitter-python",
     ]
 
-all = ["jupyter-ai-personas[finance,emoji,software_team,pr_review]"]
+pr_fix = [
+    "agno",
+    "boto3",
+    "pygithub",
+    ]
+all = ["jupyter-ai-personas[finance,emoji,software_team,pr_review,pr_fix]"]
+
 
 [build-system]
 requires = ["hatchling"]
@@ -66,3 +72,4 @@ finance_persona = "jupyter_ai_personas.finance_persona.persona:FinancePersona"
 emoji_persona = "jupyter_ai_personas.emoji_persona.persona:EmojiPersona"
 software_team_persona = "jupyter_ai_personas.software_team_persona.persona:SoftwareTeamPersona"
 pr_review_persona = "jupyter_ai_personas.pr_review_persona.persona:PRReviewPersona"
+pr_fix_persona = "jupyter_ai_personas.pr_fix_persona.persona:PRFixPersona"
