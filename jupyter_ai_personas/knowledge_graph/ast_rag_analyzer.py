@@ -93,7 +93,19 @@ class ASTRAGAnalyzer:
             
             print(f"Created hybrid retrieval system with {len(documents)} separate code elements")
     
-    def _process_file(self, file_path):
+    def _process_file(self, file_path: str) -> List[Document]:
+        """Process a single Python file and extract code elements.
+        
+        Args:
+            file_path (str): Path to the Python file to process
+            
+        Returns:
+            List[Document]: List of extracted code documents
+            
+        Raises:
+            FileNotFoundError: If file does not exist
+            Exception: For other processing errors
+        """
         """Extract classes and functions as separate documents"""
         try:
             with open(file_path, 'r', encoding='utf-8') as f:
