@@ -168,7 +168,19 @@ class ASTRAGAnalyzer:
             for child in node.children:
                 self._extract_elements(child, file_path, code, documents, current_class)
     
-    def search(self, query, k=5):
+    def search(self, query: str, k: int = 5) -> List[Dict[str, Any]]:
+        """Search for relevant code elements using hybrid retrieval.
+        
+        Args:
+            query (str): The search query
+            k (int, optional): Number of results to return. Defaults to 5.
+            
+        Returns:
+            List[Dict[str, Any]]: List of search results with content and metadata
+            
+        Raises:
+            ValueError: If vectorstore is not initialized
+        """
         """Search for relevant code elements"""
         if not self.vectorstore:
             return []
