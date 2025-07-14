@@ -104,7 +104,9 @@ class BulkCodeAnalyzer:
             
         try:
             with open(file_path, 'r', encoding='utf-8') as f:
-            code = f.read()
+                code = f.read()
+        except Exception as e:
+            raise
         
         tree = self.parser.parse(bytes(code, 'utf8'))
         self._extract_code_elements(tree.root_node, session, file_path)
