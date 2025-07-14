@@ -31,7 +31,19 @@ class ASTRAGAnalyzer:
         self.PY_LANGUAGE = Language(tspython.language())
         self.parser = Parser(self.PY_LANGUAGE)
         
-    def analyze_folder(self, folder_path):
+    def analyze_folder(self, folder_path: str) -> None:
+        """Analyze all Python files in a folder and create vector store.
+        
+        Args:
+            folder_path (str): Path to the folder containing Python files
+            
+        Returns:
+            None
+            
+        Raises:
+            NotADirectoryError: If folder_path is not a valid directory
+            Exception: For other processing errors
+        """
         """Analyze all .py files and create vector store"""
         try:
             documents = []
