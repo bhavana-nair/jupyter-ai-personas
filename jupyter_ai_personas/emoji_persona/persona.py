@@ -4,6 +4,7 @@ import emoji
 from jupyterlab_chat.models import Message
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.runnables.history import RunnableWithMessageHistory
+from agno.utils.log import logger
 
 from jupyter_ai.history import YChatHistory
 from jupyter_ai.personas import BasePersona, PersonaDefaults
