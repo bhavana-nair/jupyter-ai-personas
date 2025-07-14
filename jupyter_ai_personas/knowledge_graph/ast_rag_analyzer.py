@@ -1,3 +1,18 @@
+"""Abstract Syntax Tree Retrieval-Augmented Generation (AST-RAG) Analyzer Module.
+
+This module provides functionality for analyzing Python source code using abstract syntax trees
+and enhancing code search/retrieval using a combination of embeddings-based and keyword-based approaches.
+
+Key Features:
+- AST-based code parsing and analysis
+- Hybrid retrieval using FAISS vector store and BM25
+- Support for class and function-level code extraction
+- Query capabilities for searching code elements
+
+Classes:
+    ASTRAGAnalyzer: Core class implementing AST-RAG analysis functionality
+"""
+
 import os
 import tree_sitter_python as tspython
 from tree_sitter import Language, Parser
@@ -5,6 +20,7 @@ from langchain_community.vectorstores import FAISS
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain.schema import Document
 from langchain.retrievers import BM25Retriever, EnsembleRetriever
+from typing import List, Dict, Any, Optional, Union
 
 class ASTRAGAnalyzer:
     def __init__(self):
