@@ -25,7 +25,6 @@ def fetch_pr_comments(repo_name: str, pr_number: int, only_recent: bool = True) 
         repo = g.get_repo(repo_name)
         pr = repo.get_pull(pr_number)
         
-        # Get last commit timestamp if filtering for recent comments
         last_commit_time = None
         if only_recent:
             commits = list(pr.get_commits())
@@ -34,10 +33,8 @@ def fetch_pr_comments(repo_name: str, pr_number: int, only_recent: bool = True) 
         
         comments_data = []
         
-        # Get review comments (inline comments on code)
         review_comments = pr.get_review_comments()
         for comment in review_comments:
-            # Skip if filtering for recent and comment is before last commit
             if only_recent and last_commit_time and comment.created_at < last_commit_time:
                 continue
                 
@@ -50,26 +47,9 @@ def fetch_pr_comments(repo_name: str, pr_number: int, only_recent: bool = True) 
                 "created_at": comment.created_at.isoformat()
             })
             
-        # Get issue comments (general PR comments)
-        issue_comments = pr.get_issue_comments()
-        for comment in issue_comments:
-            # Skip if filtering for recent and comment is before last commit
-            if only_recent and last_commit_time and comment.created_at < last_commit_time:
-                continue
-                
-            comments_data.append({
-                "type": "issue",
-                "file": None,
-                "line": None,
-                "body": comment.body,
-                "author": comment.user.login,
-                "created_at": comment.created_at.isoformat()
-            })
-            
         if not comments_data:
             return "No comments found on this PR"
             
-        # Format comments for analysis
         filter_msg = " (after last commit)" if only_recent and last_commit_time else ""
         formatted_comments = f"Found {len(comments_data)} comments{filter_msg} on PR #{pr_number}:\n\n"
         

@@ -27,7 +27,6 @@ def apply_code_fixes(repo_name: str, pr_number: int, fixes: Union[List[Dict[str,
         str: Success message or error details
     """
     try:
-        # Handle string input (JSON) by parsing it
         if isinstance(fixes, str):
             try:
                 fixes = json.loads(fixes)
@@ -42,7 +41,6 @@ def apply_code_fixes(repo_name: str, pr_number: int, fixes: Union[List[Dict[str,
         repo = g.get_repo(repo_name)
         pr = repo.get_pull(pr_number)
         
-        # Get the head branch
         head_branch = pr.head.ref
         head_repo = pr.head.repo
         
@@ -55,15 +53,12 @@ def apply_code_fixes(repo_name: str, pr_number: int, fixes: Union[List[Dict[str,
             reason = fix.get("reason", "Code fix")
             
             try:
-                # Get current file content
                 file_obj = head_repo.get_contents(file_path, ref=head_branch)
                 current_content = base64.b64decode(file_obj.content).decode('utf-8')
                 
-                # Apply the fix
                 if old_content in current_content:
                     updated_content = current_content.replace(old_content, new_content)
                     
-                    # Update the file
                     head_repo.update_file(
                         path=file_path,
                         message=f"Fix: {reason}",
