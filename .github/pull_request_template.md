@@ -1,29 +1,21 @@
-<!--
-Thanks for contributing to Jupyter AI Personas!
--->
+## Pull Request Description
 
-## Problem
+### Changes Made
+- 
+- 
+- 
 
-<!-- Describe the issue this PR addresses. Include issue numbers if applicable. -->
+### Testing Done
+- [ ] Unit tests added/updated
+- [ ] Integration tests added/updated
+- [ ] Manual testing performed
 
-## Solution
+### Documentation Updates
+- [ ] API documentation updated
+- [ ] README updates (if needed)
+- [ ] Configuration examples added
 
-<!-- Explain your approach and how it solves the problem. -->
+### Related Issues
+Fixes #
 
-## Changes
-
-- **Code**: <!-- What code changes were made? -->
-- **Tests**: <!-- What tests were added or modified? -->
-- **Docs**: <!-- What documentation was updated? -->
-
-## Screenshots/Demo
-
-<!-- For UI changes, include before/after screenshots or GIF/video. Delete if not applicable. -->
-
-## Testing Instructions
-
-<!-- How can reviewers test this change? -->
-
-## Future Work
-
-<!-- Optional: Note any planned follow-up work. Delete if not applicable. -->
+### Additional Notes

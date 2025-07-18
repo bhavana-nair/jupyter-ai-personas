@@ -1,0 +1,26 @@
+# Configuration example for PRCreationPersona
+
+github:
+  # GitHub personal access token with repo scope
+  token: "your-github-token"
+  
+  # Default repository settings
+  default_repo: "org/repo-name"
+  default_base: "main"
+  
+  # PR creation settings
+  create_draft: false
+  add_labels: []
+  assign_reviewers: []
+  
+  # Templates
+  title_template: "[{type}] {description}"
+  body_template: |
+    ## Changes
+    {changes}
+    
+    ## Testing
+    {testing}
+    
+    ## Related Issues
+    {issues}

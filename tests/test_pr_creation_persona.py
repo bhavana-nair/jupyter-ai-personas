@@ -1,78 +1,134 @@
-import pytest
-import os
-from unittest.mock import Mock, patch
-from jupyter_ai_personas.pr_creation_persona import PRCreationPersona
+"""Tests for PRCreationPersona."""
 
-class TestPRCreationPersona:
+import pytest
+from unittest.mock import MagicMock, patch
+from github import Github
+from github.PullRequest import PullRequest
+from github.Repository import Repository
+
+from jupyter_ai_personas.pr_creation_persona.persona import PRCreationPersona
+from jupyter_ai_personas.exceptions import ConfigurationError, GitHubError
+
+@pytest.fixture
+def mock_github():
+    """Create mock GitHub client."""
+    mock = MagicMock(spec=Github)
+    return mock
+
+@pytest.fixture
+def mock_repo():
+    """Create mock repository."""
+    mock = MagicMock(spec=Repository)
+    return mock
+
+@pytest.fixture
+def mock_pr():
+    """Create mock pull request."""
+    mock = MagicMock(spec=PullRequest)
+    mock.html_url = "https://github.com/org/repo/pull/1"
+    mock.number = 1
+    mock.id = 12345
+    mock.state = "open"
+    mock.title = "Test PR"
+    mock.body = "PR description"
+    mock.draft = False
+    return mock
+
+@pytest.fixture
+def persona(mock_github):
+    """Create PRCreationPersona instance with mocked dependencies."""
+    with patch("github.Github", return_value=mock_github):
+        config = {
+            "github": {
+                "token": "test-token"
+            }
+        }
+        return PRCreationPersona(config=config)
+
+async def test_create_pull_request(persona, mock_github, mock_repo, mock_pr):
+    """Test successful PR creation."""
+    mock_repo.create_pull.return_value = mock_pr
+    mock_github.get_repo.return_value = mock_repo
     
-    def test_persona_initialization(self):
-        """Test that the persona initializes correctly."""
-        persona = PRCreationPersona()
-        
-        assert persona.defaults.name == "PRCreationPersona"
-        assert "specialized assistant" in persona.defaults.description.lower()
-        assert "pr creation" in persona.defaults.system_prompt.lower()
+    result = await persona.create_pull_request(
+        repo_url="org/repo",
+        title="Test PR",
+        body="PR description",
+        head_branch="feature-branch"
+    )
     
-    def test_agno_tools_usage(self):
-        """Test that persona uses Agno's built-in tools."""
-        persona = PRCreationPersona()
-        
-        # Verify persona doesn't have custom tools
-        assert not hasattr(persona, 'git_tools')
-        assert not hasattr(persona, 'file_ops')
-        
-        # Verify it will use Agno's built-in tools in team initialization
-        assert persona is not None
+    assert result["url"] == mock_pr.html_url
+    assert result["number"] == mock_pr.number
+    assert result["state"] == mock_pr.state
     
-    @patch.dict(os.environ, {'GITHUB_ACCESS_TOKEN': 'test_token'})
-    @patch('jupyter_ai_personas.pr_creation_persona.persona.AwsBedrock')
-    def test_team_initialization(self, mock_bedrock):
-        """Test that the team initializes with proper agents."""
-        persona = PRCreationPersona()
-        
-        # Mock the config
-        persona.config = Mock()
-        persona.config.lm_provider_params = {"model_id": "test_model"}
-        
-        team = persona.initialize_team("test prompt")
-        
-        assert team is not None
-        assert len(team.members) == 4  # issue_analyzer, architect, code_implementer, git_manager
-        
-        # Check agent names
-        agent_names = [agent.name for agent in team.members]
-        assert "issue_analyzer" in agent_names
-        assert "architect" in agent_names
-        assert "code_implementer" in agent_names
-        assert "git_manager" in agent_names
+    mock_repo.create_pull.assert_called_once_with(
+        title="Test PR",
+        body="PR description",
+        base="main",
+        head="feature-branch",
+        draft=False
+    )
+
+async def test_create_pull_request_missing_branch(persona):
+    """Test PR creation fails without head branch."""
+    with pytest.raises(ConfigurationError):
+        await persona.create_pull_request(
+            repo_url="org/repo",
+            title="Test PR",
+            body="PR description"
+        )
+
+async def test_create_pull_request_github_error(persona, mock_github, mock_repo):
+    """Test PR creation handles GitHub errors."""
+    mock_repo.create_pull.side_effect = Exception("API error")
+    mock_github.get_repo.return_value = mock_repo
     
-    def test_repo_url_extraction(self):
-        """Test repository URL extraction from issue text."""
-        persona = PRCreationPersona()
-        
-        # Test with full GitHub URL
-        issue_text = "Fix bug in https://github.com/user/repo repository"
-        with patch.object(persona, '_clone_and_analyze', return_value='/tmp/test') as mock_clone:
-            result = persona._auto_analyze_repo(issue_text)
-            mock_clone.assert_called_once_with("https://github.com/user/repo.git")
+    with pytest.raises(GitHubError):
+        await persona.create_pull_request(
+            repo_url="org/repo",
+            title="Test PR",
+            body="PR description",
+            head_branch="feature"
+        )
+
+async def test_update_pull_request(persona, mock_github, mock_repo, mock_pr):
+    """Test successful PR update."""
+    mock_repo.get_pull.return_value = mock_pr
+    mock_github.get_repo.return_value = mock_repo
     
-    def test_missing_github_token_error(self):
-        """Test that missing GitHub token raises appropriate error."""
-        persona = PRCreationPersona()
-        persona.config = Mock()
-        persona.config.lm_provider_params = {"model_id": "test_model"}
-        
-        with patch.dict(os.environ, {}, clear=True):
-            with pytest.raises(ValueError, match="GITHUB_ACCESS_TOKEN"):
-                persona.initialize_team("test prompt")
+    updates = {
+        "title": "Updated title",
+        "body": "Updated description"
+    }
     
-    def test_simplified_implementation(self):
-        """Test that the simplified implementation works correctly."""
-        persona = PRCreationPersona()
-        
-        # Should not have custom tools
-        assert not hasattr(persona, 'git_tools')
-        assert not hasattr(persona, 'file_ops')
-        
-        # Should still have shared_analyzer attribute
-        assert hasattr(persona, 'shared_analyzer')
+    result = await persona.update_pull_request(
+        repo_url="org/repo",
+        pr_number=1,
+        updates=updates
+    )
+    
+    assert result["url"] == mock_pr.html_url
+    assert result["number"] == mock_pr.number
+    mock_pr.edit.assert_called()
+
+async def test_get_pull_request(persona, mock_github, mock_repo, mock_pr):
+    """Test successful PR retrieval."""
+    mock_repo.get_pull.return_value = mock_pr
+    mock_github.get_repo.return_value = mock_repo
+    
+    result = await persona.get_pull_request(
+        repo_url="org/repo",
+        pr_number=1
+    )
+    
+    assert result["url"] == mock_pr.html_url
+    assert result["number"] == mock_pr.number
+    assert result["title"] == mock_pr.title
+    assert result["body"] == mock_pr.body
+    assert result["state"] == mock_pr.state
+    assert result["draft"] == mock_pr.draft
+
+def test_initialization_missing_token():
+    """Test persona initialization fails without GitHub token."""
+    with pytest.raises(ConfigurationError):
+        PRCreationPersona(config={})
