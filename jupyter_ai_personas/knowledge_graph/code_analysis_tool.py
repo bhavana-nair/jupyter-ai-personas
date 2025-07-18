@@ -3,6 +3,10 @@ from .bulk_analyzer import BulkCodeAnalyzer
 from neo4j import GraphDatabase
 import ast
 import os
+import re
+import logging
+
+logger = logging.getLogger(__name__)
 
 class CodeAnalysisTool(Toolkit):
     def __init__(self):
@@ -136,17 +140,8 @@ class CodeAnalysisTool(Toolkit):
             raise ValueError("Query exceeds maximum length of 5000 characters")
 
         # Convert query to uppercase for case-insensitive checks
-        query_upper = query.upper()Execute custom Cypher queries on the code knowledge graph
+        query_upper = query.upper()
         
-        Args:
-            query: The Cypher query to execute
-            
-        Returns:
-            str: Query results or error message
-            
-        Raises:
-            ValueError: If query contains invalid/dangerous patterns
-        """
         try:
             # Validate query before execution
             dangerous_patterns = [
