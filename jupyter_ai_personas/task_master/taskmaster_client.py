@@ -60,10 +60,12 @@ class TaskMasterClient:
             config_dir = os.path.join(work_dir, ".taskmaster")
             os.makedirs(config_dir, exist_ok=True)
             
-            # Use the provided Claude API key with proper format
-            api_key = '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'
-            # Set environment variable for other components that might need it
-            os.environ['ANTHROPIC_API_KEY'] = api_key
+            # Get API key from environment variable
+            api_key = os.environ.get('ANTHROPIC_API_KEY')
+            if not api_key:
+                print("Warning: ANTHROPIC_API_KEY environment variable not set. Please set it with your Anthropic API key.")
+                self._taskmaster_available = False
+                return
             
             # Create config file with Anthropic API
             config_path = os.path.join(config_dir, "config.json")
