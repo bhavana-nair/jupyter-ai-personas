@@ -9,7 +9,9 @@ authors = [
 requires-python = ">=3.9"
 
 dependencies = [
-    "jupyter_ai>=3.0.0a1"
+    "jupyter_ai>=3.0.0a1",
+    "tree_sitter",
+    "tree_sitter_python"
 ]
 
 [project.optional-dependencies]
@@ -65,4 +67,4 @@ build-backend = "hatchling.build"
 
 [project.entry-points."jupyter_ai.personas"]
 
-task_pr_persona = "jupyter_ai_personas.task_master.task_pr_persona:TaskPRPersona"
+pr_creation_persona = "jupyter_ai_personas.pr_creation_persona.persona:PRCreationPersona"

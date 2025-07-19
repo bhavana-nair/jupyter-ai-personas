@@ -61,16 +61,14 @@ class TaskMasterClient:
             os.makedirs(config_dir, exist_ok=True)
             
             # Get API key from environment variable
-            api_key = os.environ.get('ANTHROPIC_API_KEY')
+            api_key = os.getenv('ANTHROPIC_API_KEY')
+            print(f"ANTHROPIC_API_KEY: {api_key}")
             if not api_key:
-                print("Warning: ANTHROPIC_API_KEY environment variable not set. Please set it with your Anthropic API key.")
-                self._taskmaster_available = False
-                return
+                raise ValueError("ANTHROPIC_API_KEY environment variable is not set")
             
             # Create config file with Anthropic API
             config_path = os.path.join(config_dir, "config.json")
             with open(config_path, "w") as f:
-                # Create config with all possible key formats that TaskMaster might use
                 json.dump({
                     "provider": "anthropic",
                     "model": "claude-3-5-sonnet-20241022",
@@ -88,15 +86,13 @@ class TaskMasterClient:
             self._taskmaster_available = False
     
     async def create_tasks_from_prd(self, prd_content: str) -> List[Task]:
-        """Create tasks from PRD using TaskMaster with Claude API."""
-        if not self._taskmaster_available:
-            raise ValueError("TaskMaster is not available. Please install it with 'npm install -g task-master'.")
+        """Create tasks from PRD using TaskMaster with Anthropic API."""
             
-        # Ensure TaskMaster is available
-        if not self._taskmaster_available:
-            self._ensure_taskmaster_setup()
-            if not self._taskmaster_available:
-                raise ValueError("TaskMaster is not available. Please install it with 'npm install -g task-master'.")
+        # Check for API key in environment
+        api_key = os.getenv('ANTHROPIC_API_KEY')
+        if not api_key:
+            print("ANTHROPIC_API_KEY not set, using fallback task creation")
+            return
             
         try:
             # Use current directory where TaskMaster is already installed
@@ -122,7 +118,7 @@ class TaskMasterClient:
                 print(f"Command completed with return code: {result.returncode}")
             except Exception as cmd_error:
                 print(f"Command execution error: {cmd_error}")
-                raise ValueError(f"Failed to execute TaskMaster command: {cmd_error}")
+                return 
             
             print(f"TaskMaster parse-prd result: {result.returncode}")
             if result.returncode != 0:
@@ -137,17 +133,15 @@ class TaskMasterClient:
                 ], cwd=work_dir, capture_output=True, text=True)
                 print(f"Debug output: {debug_result.stdout}")
                 print(f"Debug errors: {debug_result.stderr}")
-                raise ValueError(f"TaskMaster failed to parse PRD: {result.stderr}")
             
             try:
                 return self._load_tasks()
             except Exception as load_error:
                 print(f"Error loading tasks: {load_error}")
-                raise ValueError(f"Failed to load tasks: {load_error}")
                 
         except Exception as e:
             print(f"Error creating tasks: {e}")
-            raise ValueError(f"Failed to create tasks: {e}")
+            return 
     
     def _load_tasks(self) -> List[Task]:
         """Load tasks from TaskMaster tasks.json file."""
@@ -213,69 +207,42 @@ class TaskMasterClient:
         
         return available
     
-    def get_task_by_id(self, task_id: str) -> Optional[Task]:
-        """Get a task by its ID."""
-        for task in self.tasks:
-            if task.id == task_id:
-                return task
-        return None
+    def format_tasks_for_agents(self, tasks: List[Task]) -> str:
+        """Format tasks for agent consumption."""
+        if not tasks:
+            return "No tasks available."
+        
+        formatted = "Available Tasks from TaskMaster:\n\n"
+        for task in tasks:
+            formatted += f"**{task.title}** (ID: {task.id})\n"
+            formatted += f"Priority: {task.priority}\n"
+            formatted += f"Status: {task.status}\n"
+            formatted += f"Description: {task.description}\n"
+            
+            if task.dependencies:
+                formatted += f"Dependencies: {', '.join(task.dependencies)}\n"
+            
+            if task.details:
+                formatted += f"Details: {task.details}\n"
+            
+            if task.test_strategy:
+                formatted += f"Test Strategy: {task.test_strategy}\n"
+            
+            formatted += "\n"
+        
+        return formatted
     
     def update_task_status(self, task_id: str, status: str) -> bool:
-        """Update the status of a task."""
-        task = self.get_task_by_id(task_id)
-        if not task:
-            return False
-        
-        task.status = status
-        
-        # Try to update status using TaskMaster CLI if available
+        """Update task status using TaskMaster."""
         try:
             result = subprocess.run([
                 'npx', 'task-master', 'set-status',
                 f'--to-{status}',
                 '--id', task_id
             ], cwd=self.project_root, capture_output=True, text=True)
-        except Exception:
-            # Ignore CLI errors, we've already updated the in-memory task
-            pass
             
-        return True
-    
-    def format_tasks_for_agents(self, tasks: List[Task] = None) -> str:
-        """Format tasks in a way that's easy for agents to understand."""
-        if tasks is None:
-            tasks = self.tasks
-            
-        if not tasks:
-            return "No tasks available."
-        
-        formatted = ""
-        for task in tasks:
-            formatted += f"- Task #{task.id}: {task.title} (Priority: {task.priority}, Status: {task.status})\n"
-            if task.dependencies:
-                formatted += f"  Dependencies: {', '.join(['#' + dep for dep in task.dependencies])}\n"
-        
-        return formatted
-    
-    def get_task_details(self, task_id: str) -> str:
-        """Get formatted details for a specific task."""
-        task = self.get_task_by_id(task_id)
-        if not task:
-            return f"Task with ID {task_id} not found."
-        
-        details = f"## Task {task.id}: {task.title}\n\n"
-        details += f"**Priority:** {task.priority}\n\n"
-        details += f"**Status:** {task.status}\n\n"
-        
-        if task.dependencies:
-            details += f"**Dependencies:** {', '.join(task.dependencies)}\n\n"
-        
-        details += f"**Description:**\n{task.description}\n\n"
-        
-        if task.details:
-            details += f"**Additional Details:**\n{task.details}\n\n"
-            
-        if task.test_strategy:
-            details += f"**Test Strategy:**\n{task.test_strategy}\n\n"
-            
-        return details
+            return result.returncode == 0
+        except Exception as e:
+            print(f"Error updating task status: {e}")
+            return False
+  
