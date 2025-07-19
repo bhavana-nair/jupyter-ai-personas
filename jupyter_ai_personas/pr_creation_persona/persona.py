@@ -37,6 +37,7 @@ class PRCreationPersona(BasePersona):
         self.current_repo_url = None
         self.current_issue_url = None
         self.local_repo_path = os.getenv("LOCAL_REPO_PATH", None)
+        self.feature_branch = None
 
     @property
     def defaults(self):
@@ -128,8 +129,11 @@ class PRCreationPersona(BasePersona):
                 
                 "STEP 1 - Repository Setup:",
                 f"   - {'Use existing repository at ' + self.local_repo_path if self.local_repo_path else 'Clone repository using shell commands'}",
-                "   - If using existing repo: fetch latest changes and checkout main branch",
-                "   - Create feature branch with descriptive name",
+                "   - If using existing repo: fetch latest changes",
+                f"   - Use the feature branch: {self.feature_branch if self.feature_branch else 'feature/issue-description'}",
+                "   - Check if branch exists: git branch --list <branch_name>",
+                "   - If exists: git checkout <branch_name>",
+                "   - If not exists: git checkout -b <branch_name> from main/master",
                 "   - Verify current codebase state",
                 
                 "STEP 2 - Code Implementation:",
@@ -174,9 +178,10 @@ class PRCreationPersona(BasePersona):
                 "   - Verify repository state and structure",
                 
                 "STEP 2 - Branch Management:",
-                "   - Create feature branch: git checkout -b feature/issue-description",
-                "   - Use descriptive branch names based on issue",
-                "   - Ensure branch is created from latest main",
+                f"   - Use the feature branch: {self.feature_branch if self.feature_branch else 'feature/issue-description'}",
+                "   - Check if branch exists: git branch --list <branch_name>",
+                "   - If exists: git checkout <branch_name>",
+                "   - If not exists: git checkout -b <branch_name>",
                 
                 "STEP 3 - Commit Operations:",
                 "   - Stage files: git add .",
@@ -322,6 +327,11 @@ class PRCreationPersona(BasePersona):
                 print(f"Extracted repo URL: {self.current_repo_url}")
             
             self.current_issue_url = issue_url
+            
+            # Create a consistent feature branch name based on the issue number
+            issue_number = issue_url.split('/')[-1]
+            self.feature_branch = f"feature/issue-{issue_number}"
+            print(f"Using feature branch: {self.feature_branch} for all tasks")
             
             # If LOCAL_REPO_PATH is set but doesn't exist, clone the repository there
             if self.local_repo_path and self.current_repo_url and not os.path.exists(self.local_repo_path):
@@ -482,6 +492,9 @@ class PRCreationPersona(BasePersona):
             
             # Create repository context information
             repo_context = f"Repository URL: {self.current_repo_url}\n"
+            if self.feature_branch:
+                repo_context += f"Feature Branch: {self.feature_branch}\n"
+                repo_context += "Use this feature branch for all tasks.\n"
             if self.local_repo_path:
                 repo_context += f"Local Repository Path: {self.local_repo_path}\n"
                 repo_context += "Use the existing local repository instead of cloning a new one.\n"
@@ -599,6 +612,7 @@ class PRCreationPersona(BasePersona):
             
             Repository: {self.current_repo_url}
             Local Repository Path: {self.local_repo_path}
+            Feature Branch: {self.feature_branch}
             Issue URL: {self.current_issue_url}
             
             Completed Tasks:
@@ -606,6 +620,8 @@ class PRCreationPersona(BasePersona):
             
             PRD Context:
             {self.current_prd[:500]}...
+            
+            IMPORTANT: All tasks have been implemented in the same feature branch ({self.feature_branch}).
             """
             
             # Initialize git manager agent
@@ -620,8 +636,8 @@ class PRCreationPersona(BasePersona):
                     
                     "STEP 1 - Repository Verification:",
                     f"   - Verify the local repository at {self.local_repo_path}",
-                    "   - Check current branch and status",
-                    "   - Ensure all changes are committed",
+                    f"   - Check that you're on the feature branch {self.feature_branch}",
+                    "   - Ensure all changes are committed and pushed",
                     
                     "STEP 2 - PR Description Creation:",
                     "   - Create a detailed PR description based on completed tasks",

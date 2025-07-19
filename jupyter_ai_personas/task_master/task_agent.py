@@ -80,6 +80,14 @@ class TaskExecutionAgent:
         
         Implement this task following the execution workflow.
         Focus only on meeting the acceptance criteria with minimal code.
+        
+        IMPORTANT GIT INSTRUCTIONS:
+        - If a feature branch is specified in the repository context, use that branch for implementation
+        - Check if the branch exists before creating it (git branch --list <branch_name>)
+        - If the branch exists, use it (git checkout <branch_name>)
+        - If the branch doesn't exist, create it from main/master (git checkout -b <branch_name>)
+        - Always commit your changes to the specified feature branch
+        - Push changes to the same branch name on remote
         """
         
         response = self.agent.run(prompt, stream=False)
