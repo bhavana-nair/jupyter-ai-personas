@@ -207,26 +207,34 @@ class TaskMasterClient:
         
         return available
     
-    def format_tasks_for_agents(self, tasks: List[Task]) -> str:
-        """Format tasks for agent consumption."""
+    def format_tasks_for_agents(self, tasks: List[Task], show_details: bool = False) -> str:
+        """Format tasks for agent consumption.
+        
+        Args:
+            tasks: List of tasks to format
+            show_details: Whether to show implementation details and test strategy
+        """
         if not tasks:
             return "No tasks available."
         
-        formatted = "Available Tasks from TaskMaster:\n\n"
+        formatted = ""  # Remove the header to make it cleaner
         for task in tasks:
-            formatted += f"**{task.title}** (ID: {task.id})\n"
-            formatted += f"Priority: {task.priority}\n"
-            formatted += f"Status: {task.status}\n"
+            formatted += f"**Task #{task.id}: {task.title}**\n"
             formatted += f"Description: {task.description}\n"
             
-            if task.dependencies:
-                formatted += f"Dependencies: {', '.join(task.dependencies)}\n"
-            
-            if task.details:
-                formatted += f"Details: {task.details}\n"
-            
-            if task.test_strategy:
-                formatted += f"Test Strategy: {task.test_strategy}\n"
+            # Only show these details if explicitly requested
+            if show_details:
+                formatted += f"Priority: {task.priority}\n"
+                formatted += f"Status: {task.status}\n"
+                
+                if task.dependencies:
+                    formatted += f"Dependencies: {', '.join(task.dependencies)}\n"
+                
+                if task.details:
+                    formatted += f"Implementation Details:\n{task.details}\n"
+                
+                if task.test_strategy:
+                    formatted += f"Test Strategy:\n{task.test_strategy}\n"
             
             formatted += "\n"
         
@@ -245,4 +253,20 @@ class TaskMasterClient:
         except Exception as e:
             print(f"Error updating task status: {e}")
             return False
+    
+    def get_task_by_id(self, task_id: str) -> Optional[Task]:
+        """Get a task by its ID."""
+        for task in self.tasks:
+            if task.id == task_id:
+                return task
+        return None
+    
+    def get_task_details(self, task_id: str) -> str:
+        """Get formatted details for a specific task."""
+        task = self.get_task_by_id(task_id)
+        if not task:
+            return f"Task with ID {task_id} not found."
+        
+        # Format with full details
+        return self.format_tasks_for_agents([task], show_details=True)
   

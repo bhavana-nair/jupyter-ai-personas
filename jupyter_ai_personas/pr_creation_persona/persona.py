@@ -337,32 +337,28 @@ class PRCreationPersona(BasePersona):
             available_tasks = self.taskmaster.get_available_tasks()
             print(f"Found {len(available_tasks)} available tasks with no dependencies")
             
-            # Format response
+            # Format response - SIMPLIFIED to show only PRD and available tasks
             response = f"## Issue Processed Successfully\n\n"
             response += f"Issue URL: {issue_url}\n\n"
-            response += f"### PRD Created\n\n"
-            response += f"{self.current_prd[:500]}...\n\n"  # Show first 500 chars of PRD
-            response += f"### Tasks Created\n\n"
-            response += self.taskmaster.format_tasks_for_agents(self.current_tasks)
+            response += f"### PRD\n\n"
+            response += f"{self.current_prd}\n\n"  # Show full PRD
             
-            # Highlight available tasks
-            response += f"\n\n### Ready to Implement Tasks\n"
+            # Only show available tasks with no dependencies
+            response += f"### Available Tasks\n"
             if available_tasks:
-                response += f"These tasks have no unmet dependencies and can be implemented immediately:\n\n"
-                response += self.taskmaster.format_tasks_for_agents(available_tasks)
+                response += f"These tasks have no dependencies and can be implemented immediately:\n\n"
+                # Only show title and description for each task
+                for task in available_tasks:
+                    response += f"**Task #{task.id}: {task.title}**\n"
+                    response += f"Description: {task.description}\n\n"
                 
                 # Add quick links to details and implementation
-                response += f"\n\nQuick Actions:\n"
-                for task in available_tasks[:3]:  # Limit to first 3 tasks to avoid too long response
-                    response += f"- Show details: 'show task details for #{task.id}'\n"
-                    response += f"- Implement: 'implement task #{task.id}'\n"
+                response += f"\n\nCommands:\n"
+                response += f"- 'show task details for #ID' to see implementation details of a specific task\n"
+                response += f"- 'implement task #ID' to implement a specific task\n"
+                response += f"- 'list tasks' to see all tasks\n"
             else:
                 response += f"No tasks are currently ready for implementation.\n"
-            
-            response += f"\n\nYou can now use commands like:\n"
-            response += f"- 'show task details for #1' to see details of a specific task\n"
-            response += f"- 'implement task #1' to implement a specific task\n"
-            response += f"- 'list tasks' to list all tasks\n"
             
             return response
             
@@ -373,7 +369,7 @@ class PRCreationPersona(BasePersona):
             return f"## Error Processing Issue\n\nAn error occurred while processing the issue: {str(e)}\n\nPlease try again or contact support."
     
     async def _show_task_details(self, task_id: str):
-        """Show details for a specific task."""
+        """Show details for a specific task, including implementation details."""
         try:
             self._initialize_taskmaster()
             
@@ -383,24 +379,46 @@ class PRCreationPersona(BasePersona):
             task = self.taskmaster.get_task_by_id(task_id)
             if not task:
                 return f"Task with ID {task_id} not found."
-                
-            task_details = self.taskmaster.get_task_details(task_id)
+            
+            # Format the task with full details
+            response = f"## Task #{task_id} Details\n\n"
+            response += f"**{task.title}**\n\n"
+            response += f"**Description:** {task.description}\n\n"
+            response += f"**Priority:** {task.priority}\n"
+            response += f"**Status:** {task.status}\n\n"
+            
+            # Show dependencies
+            if task.dependencies:
+                response += f"**Dependencies:**\n"
+                for dep_id in task.dependencies:
+                    dep_task = self.taskmaster.get_task_by_id(dep_id)
+                    status = "✅ Completed" if dep_task and dep_task.status == "done" else "⏳ Pending"
+                    response += f"- Task #{dep_id}: {status}\n"
+                response += "\n"
+            
+            # Show implementation details
+            if task.details:
+                response += f"**Implementation Details:**\n```\n{task.details}\n```\n\n"
+            
+            # Show test strategy
+            if task.test_strategy:
+                response += f"**Test Strategy:**\n```\n{task.test_strategy}\n```\n\n"
             
             # Add implementation option if task is available
             available_tasks = self.taskmaster.get_available_tasks()
             if task in available_tasks:
-                task_details += f"\n\n**This task has no unmet dependencies and can be implemented immediately.**\n"
-                task_details += f"\nTo implement this task, type: 'implement task #{task_id}'\n"
+                response += f"**This task has no unmet dependencies and can be implemented immediately.**\n"
+                response += f"\nTo implement this task, type: 'implement task #{task_id}'\n"
             else:
                 # Show dependencies that need to be completed first
                 if task.dependencies:
-                    task_details += f"\n\n**This task has dependencies that must be completed first:**\n"
+                    response += f"\n**This task has dependencies that must be completed first:**\n"
                     for dep_id in task.dependencies:
                         dep_task = self.taskmaster.get_task_by_id(dep_id)
-                        status = "✅ Completed" if dep_task and dep_task.status == "done" else "⏳ Pending"
-                        task_details += f"- Task #{dep_id}: {status}\n"
+                        if dep_task and dep_task.status != "done":
+                            response += f"- Task #{dep_id}: {dep_task.title} (Status: {dep_task.status})\n"
             
-            return f"## Task Details\n\n{task_details}"
+            return response
             
         except Exception as e:
             import traceback
@@ -508,19 +526,22 @@ class PRCreationPersona(BasePersona):
             # Get available tasks (no dependencies)
             available_tasks = self.taskmaster.get_available_tasks()
             
-            response = f"## All Tasks\n\n{self.taskmaster.format_tasks_for_agents(self.current_tasks)}"
+            response = f"## All Tasks\n\n"
+            for task in self.current_tasks:
+                response += f"**Task #{task.id}: {task.title}**\n"
+                response += f"Description: {task.description}\n"
+                response += f"Status: {task.status}\n\n"
             
             # Add section for available tasks
             response += f"\n\n## Ready to Implement Tasks\n"
             if available_tasks:
                 response += f"These tasks have no unmet dependencies and can be implemented immediately:\n\n"
-                response += self.taskmaster.format_tasks_for_agents(available_tasks)
+                response += self.taskmaster.format_tasks_for_agents(available_tasks, show_details=False)
                 
                 # Add quick links to details and implementation
-                response += f"\n\nQuick Actions:\n"
-                for task in available_tasks[:3]:  # Limit to first 3 tasks to avoid too long response
-                    response += f"- Show details: 'show task details for #{task.id}'\n"
-                    response += f"- Implement: 'implement task #{task.id}'\n"
+                response += f"\n\nCommands:\n"
+                response += f"- 'show task details for #ID' to see implementation details of a specific task\n"
+                response += f"- 'implement task #ID' to implement a specific task\n"
             else:
                 response += f"No tasks are currently ready for implementation.\n"
             
