@@ -50,6 +50,20 @@ Issue: Add validation to user input in the login form to prevent SQL injection
 The login form currently accepts any input without validation...
 ```
 
+### Using with Local Repository
+
+If you're already working on a repository locally, you can set the `LOCAL_REPO_PATH` environment variable to use your existing clone:
+
+```bash
+# Set the environment variable to your local repository path
+export LOCAL_REPO_PATH=/path/to/your/local/repo
+
+# Then use the persona as normal - it will use your local repository
+# instead of cloning a new one
+```
+
+If the specified `LOCAL_REPO_PATH` doesn't exist but the environment variable is set, the persona will automatically clone the repository to that location when processing an issue. This allows you to specify where you want the repository to be cloned without having to create the directory structure yourself.
+
 ## Workflow
 
 ### Phase 1: Issue Analysis
@@ -83,6 +97,11 @@ The login form currently accepts any input without validation...
 - GitHub personal access token in `GITHUB_ACCESS_TOKEN` environment variable
 - Neo4j database running on `neo4j://127.0.0.1:7687`
 - AWS credentials configured for Bedrock access
+
+## Environment Variables
+
+- `GITHUB_ACCESS_TOKEN`: Required. GitHub personal access token for repository access.
+- `LOCAL_REPO_PATH`: Optional. Path to an existing local repository clone. When provided, the persona will use this local repository instead of cloning a new one, which is ideal for developers already working on the repository.
 
 ## Output
 

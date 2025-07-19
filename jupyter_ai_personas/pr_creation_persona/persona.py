@@ -21,6 +21,7 @@ sys.path.append('../knowledge_graph')
 from jupyter_ai_personas.knowledge_graph.bulk_analyzer import BulkCodeAnalyzer
 from jupyter_ai_personas.pr_review_persona.repo_analysis_tools import RepoAnalysisTools
 from jupyter_ai_personas.task_master import TaskMasterClient, PRDAgent, Task
+from jupyter_ai_personas.task_master.task_agent import TaskExecutionAgent
 
 session = boto3.Session()
 
@@ -35,6 +36,7 @@ class PRCreationPersona(BasePersona):
         self.current_tasks = []
         self.current_repo_url = None
         self.current_issue_url = None
+        self.local_repo_path = os.getenv("LOCAL_REPO_PATH", None)
 
     @property
     def defaults(self):
@@ -125,7 +127,8 @@ class PRCreationPersona(BasePersona):
                 "MANDATORY CODE IMPLEMENTATION WORKFLOW:",
                 
                 "STEP 1 - Repository Setup:",
-                "   - Clone repository using shell commands",
+                f"   - {'Use existing repository at ' + self.local_repo_path if self.local_repo_path else 'Clone repository using shell commands'}",
+                "   - If using existing repo: fetch latest changes and checkout main branch",
                 "   - Create feature branch with descriptive name",
                 "   - Verify current codebase state",
                 
@@ -166,7 +169,8 @@ class PRCreationPersona(BasePersona):
                 
                 "STEP 1 - Repository Operations:",
                 "   - Use shell commands for git operations",
-                "   - Clone main branch from repository",
+                f"   - {'Use existing repository at ' + self.local_repo_path if self.local_repo_path else 'Clone main branch from repository'}",
+                "   - If using existing repo: fetch latest changes and checkout main branch",
                 "   - Verify repository state and structure",
                 
                 "STEP 2 - Branch Management:",
@@ -294,6 +298,12 @@ class PRCreationPersona(BasePersona):
                 "action": "list_tasks"
             }
             
+        # Check for create PR command
+        if re.search(r'(?:create|make)\s+(?:a\s+)?(?:PR|pull\s*request)(?:\s+for\s+(?:completed|done)\s+tasks)?', message, re.IGNORECASE):
+            return {
+                "action": "create_pr"
+            }
+            
         # Default to standard PR creation
         return {
             "action": "standard_pr_creation"
@@ -308,10 +318,15 @@ class PRCreationPersona(BasePersona):
             # Extract repo URL from issue URL
             repo_match = re.search(r'(https://github\.com/[^/]+/[^/]+)/', issue_url)
             if repo_match:
-                self.current_repo_url = repo_match.group(1)
+                self.current_repo_url = repo_match.group(1) + ".git"
                 print(f"Extracted repo URL: {self.current_repo_url}")
             
             self.current_issue_url = issue_url
+            
+            # If LOCAL_REPO_PATH is set but doesn't exist, clone the repository there
+            if self.local_repo_path and self.current_repo_url and not os.path.exists(self.local_repo_path):
+                print(f"LOCAL_REPO_PATH is set to {self.local_repo_path} but doesn't exist. Will clone repository there.")
+                # The actual cloning will happen in _validate_local_repo when called
             
             # Create PRD from issue
             print("Creating PRD from issue...")
@@ -427,7 +442,7 @@ class PRCreationPersona(BasePersona):
             return f"## Error Showing Task Details\n\nAn error occurred while showing task details: {str(e)}\n\nPlease try again or contact support."
     
     async def _implement_task(self, task_id: str):
-        """Implement a specific task."""
+        """Implement a specific task using TaskExecutionAgent."""
         try:
             print(f"Implementing task #{task_id}...")
             self._initialize_taskmaster()
@@ -462,36 +477,27 @@ class PRCreationPersona(BasePersona):
             
             print(f"Task #{task_id} is available for implementation")
             
-            # Create system prompt with task details
-            system_prompt = f"""
-            Implement the following task:
+            # Mark task as in-progress
+            self.taskmaster.update_task_status(task_id, "in-progress")
             
-            Task ID: {task.id}
-            Title: {task.title}
-            Description: {task.description}
-            Priority: {task.priority}
+            # Create repository context information
+            repo_context = f"Repository URL: {self.current_repo_url}\n"
+            if self.local_repo_path:
+                repo_context += f"Local Repository Path: {self.local_repo_path}\n"
+                repo_context += "Use the existing local repository instead of cloning a new one.\n"
             
-            Repository URL: {self.current_repo_url}
-            Issue URL: {self.current_issue_url}
+            # Add PRD context
+            repo_context += f"\nPRD Context:\n{self.current_prd[:1000]}...\n"
             
-            PRD Context:
-            {self.current_prd[:1000]}...
-            """
+            # Initialize TaskExecutionAgent
+            model_id = self.config_manager.lm_provider_params["model_id"]
+            task_agent = TaskExecutionAgent(model_id=model_id, session=session)
             
-            # Initialize team for task implementation
-            print(f"Initializing implementation team for task #{task_id}")
-            team = self.initialize_team(system_prompt)
+            # Execute the task
+            print(f"Running TaskExecutionAgent for task #{task_id}")
+            result = await task_agent.execute_task(task, repo_context)
             
-            # Run the team to implement the task
-            print(f"Running implementation team for task #{task_id}")
-            response = team.run(
-                f"Implement task #{task.id}: {task.title}",
-                stream=False,
-                stream_intermediate_steps=True,
-                show_full_reasoning=True
-            )
-            
-            # Update task status
+            # Update task status to done
             print(f"Updating task #{task_id} status to done")
             self.taskmaster.update_task_status(task_id, "done")
             
@@ -499,15 +505,19 @@ class PRCreationPersona(BasePersona):
             new_available_tasks = self.taskmaster.get_available_tasks()
             newly_available = [t for t in new_available_tasks if t not in available_tasks]
             
-            result = response.content
+            # Format the response
+            response = f"## Task #{task_id} Implementation\n\n"
+            response += f"**{task.title}**\n\n"
+            response += result
             
             # Add information about newly available tasks
             if newly_available:
-                result += f"\n\n## New Tasks Available\n\n"
-                result += f"The following tasks are now available for implementation:\n\n"
-                result += self.taskmaster.format_tasks_for_agents(newly_available)
+                response += f"\n\n## New Tasks Available\n\n"
+                response += f"The following tasks are now available for implementation:\n\n"
+                response += self.taskmaster.format_tasks_for_agents(newly_available, show_details=False)
+                response += f"\n\nUse 'show task details for #ID' to see implementation details of a specific task.\n"
             
-            return result
+            return response
             
         except Exception as e:
             import traceback
@@ -525,6 +535,9 @@ class PRCreationPersona(BasePersona):
             
             # Get available tasks (no dependencies)
             available_tasks = self.taskmaster.get_available_tasks()
+            
+            # Get completed tasks
+            completed_tasks = [t for t in self.current_tasks if t.status == "done"]
             
             response = f"## All Tasks\n\n"
             for task in self.current_tasks:
@@ -545,6 +558,15 @@ class PRCreationPersona(BasePersona):
             else:
                 response += f"No tasks are currently ready for implementation.\n"
             
+            # Add section for completed tasks if any
+            if completed_tasks:
+                response += f"\n\n## Completed Tasks\n"
+                response += f"These tasks have been completed:\n\n"
+                for task in completed_tasks:
+                    response += f"- Task #{task.id}: {task.title}\n"
+                
+                response += f"\n\nYou can create a PR for these completed tasks by typing: 'create PR for completed tasks'\n"
+            
             return response
             
         except Exception as e:
@@ -553,10 +575,99 @@ class PRCreationPersona(BasePersona):
             print(f"Error in _list_tasks: {e}\n{error_trace}")
             return f"## Error Listing Tasks\n\nAn error occurred while listing tasks: {str(e)}\n\nPlease try again or contact support."
     
+    async def _create_pr(self):
+        """Create a PR from completed tasks."""
+        try:
+            self._initialize_taskmaster()
+            
+            if not self.current_tasks:
+                return "No tasks available. Please process an issue first."
+            
+            # Get completed tasks
+            completed_tasks = [t for t in self.current_tasks if t.status == "done"]
+            
+            if not completed_tasks:
+                return "No completed tasks found. Please implement at least one task before creating a PR."
+            
+            # Validate local repository
+            if not self._validate_local_repo():
+                return "No valid local repository found. Please set the LOCAL_REPO_PATH environment variable to a valid git repository."
+            
+            # Create system prompt with PR details
+            system_prompt = f"""
+            Create a Pull Request for the following completed tasks:
+            
+            Repository: {self.current_repo_url}
+            Local Repository Path: {self.local_repo_path}
+            Issue URL: {self.current_issue_url}
+            
+            Completed Tasks:
+            {', '.join([f'#{t.id}: {t.title}' for t in completed_tasks])}
+            
+            PRD Context:
+            {self.current_prd[:500]}...
+            """
+            
+            # Initialize git manager agent
+            model_id = self.config_manager.lm_provider_params["model_id"]
+            git_manager = Agent(
+                name="git_pr_manager",
+                role="Git PR Manager",
+                model=AwsBedrock(id=model_id, session=session),
+                markdown=True,
+                instructions=[
+                    "PR CREATION WORKFLOW:",
+                    
+                    "STEP 1 - Repository Verification:",
+                    f"   - Verify the local repository at {self.local_repo_path}",
+                    "   - Check current branch and status",
+                    "   - Ensure all changes are committed",
+                    
+                    "STEP 2 - PR Description Creation:",
+                    "   - Create a detailed PR description based on completed tasks",
+                    "   - Include task IDs and titles",
+                    "   - Summarize the changes made",
+                    "   - Reference the original issue",
+                    
+                    "STEP 3 - PR Creation Instructions:",
+                    "   - Provide clear instructions for the user to create the PR",
+                    "   - Include the branch name to use",
+                    "   - Include the PR description to copy-paste",
+                    
+                    "CRITICAL REQUIREMENTS:",
+                    "- DO NOT create the PR automatically",
+                    "- Provide instructions for the user to create it manually",
+                    "- Ensure all task implementations are included"
+                ],
+                tools=[
+                    ShellTools(),
+                    GithubTools(get_pull_requests=True),
+                    ReasoningTools(add_instructions=True, think=True, analyze=True)
+                ]
+            )
+            
+            # Run the git manager to prepare PR
+            response = git_manager.run(
+                f"Create PR instructions for completed tasks: {', '.join([f'#{t.id}' for t in completed_tasks])}",
+                stream=False
+            )
+            
+            return response.content
+            
+        except Exception as e:
+            import traceback
+            error_trace = traceback.format_exc()
+            print(f"Error in _create_pr: {e}\n{error_trace}")
+            return f"## Error Creating PR\n\nAn error occurred while creating the PR: {str(e)}\n\nPlease try again or create the PR manually."
+    
     async def _standard_pr_creation(self, message_body, system_prompt):
         """Standard PR creation workflow."""
         # Auto-analyze repository if URL is provided
         self._auto_analyze_repo(message_body)
+        
+        # Add local repository path to system prompt if available
+        if self.local_repo_path:
+            system_prompt += f"\n\nUse the existing local repository at: {self.local_repo_path}"
         
         team = self.initialize_team(system_prompt)
         response = team.run(
@@ -606,6 +717,8 @@ class PRCreationPersona(BasePersona):
                 response = await self._implement_task(command["task_id"])
             elif action == "list_tasks":
                 response = await self._list_tasks()
+            elif action == "create_pr":
+                response = await self._create_pr()
             else:  # standard_pr_creation
                 response = await self._standard_pr_creation(message.body, system_prompt)
             
@@ -633,19 +746,82 @@ class PRCreationPersona(BasePersona):
                 yield error_message
             await self.stream_message(error_iterator())
     
+    def _validate_local_repo(self):
+        """Validate that the local repository path exists and is a git repository.
+        If the path doesn't exist but is specified, clone the repository there."""
+        if not self.local_repo_path:
+            return False
+            
+        try:
+            # Check if directory exists
+            if not os.path.isdir(self.local_repo_path):
+                # If we have a repo URL and the directory doesn't exist, clone it
+                if self.current_repo_url:
+                    print(f"Local repository path {self.local_repo_path} doesn't exist. Cloning repository...")
+                    # Create parent directory if needed
+                    os.makedirs(os.path.dirname(self.local_repo_path), exist_ok=True)
+                    
+                    # Clone the repository to the specified path
+                    result = subprocess.run(
+                        ["git", "clone", self.current_repo_url, self.local_repo_path],
+                        capture_output=True,
+                        text=True
+                    )
+                    
+                    if result.returncode != 0:
+                        print(f"Failed to clone repository: {result.stderr}")
+                        return False
+                        
+                    print(f"Successfully cloned repository to {self.local_repo_path}")
+                else:
+                    print(f"Local repository path {self.local_repo_path} is not a directory and no repo URL is available")
+                    return False
+                
+            # Check if it's a git repository
+            result = subprocess.run(
+                ["git", "-C", self.local_repo_path, "rev-parse", "--is-inside-work-tree"],
+                capture_output=True,
+                text=True
+            )
+            
+            if result.returncode != 0 or result.stdout.strip() != "true":
+                print(f"Local repository path {self.local_repo_path} is not a git repository")
+                return False
+                
+            print(f"Validated local repository at {self.local_repo_path}")
+            return True
+        except Exception as e:
+            print(f"Error validating local repository: {e}")
+            return False
+    
     def _auto_analyze_repo(self, issue_text: str):
         """Automatically extract repo URL and create knowledge graph"""
-        patterns = [
-            r'https://github\.com/([^/\s]+/[^/\s]+)',
-            r'github\.com/([^/\s]+/[^/\s]+)'
-        ]
+        # If we don't have a repo URL yet, try to extract it from the issue text
+        if not self.current_repo_url:
+            patterns = [
+                r'https://github\.com/([^/\s]+/[^/\s]+)',
+                r'github\.com/([^/\s]+/[^/\s]+)'
+            ]
+            
+            for pattern in patterns:
+                match = re.search(pattern, issue_text)
+                if match:
+                    repo_path = match.group(1).rstrip('/')
+                    self.current_repo_url = f"https://github.com/{repo_path}.git"
+                    print(f"Extracted repo URL: {self.current_repo_url}")
+                    break
         
-        for pattern in patterns:
-            match = re.search(pattern, issue_text)
-            if match:
-                repo_path = match.group(1).rstrip('/')
-                repo_url = f"https://github.com/{repo_path}.git"
-                return self._clone_and_analyze(repo_url)
+        # If we have a valid local repository, use that instead of cloning
+        if self._validate_local_repo():
+            print(f"Using local repository at {self.local_repo_path} for analysis")
+            analyzer = BulkCodeAnalyzer("neo4j://127.0.0.1:7687", (os.getenv("NEO4J_USER", "neo4j"), os.getenv("NEO4J_PASSWORD", "")))
+            analyzer.analyze_folder(self.local_repo_path, clear_existing=True)
+            return self.local_repo_path
+        
+        # If we have a repo URL but no valid local repo, clone it to a temporary location
+        if self.current_repo_url:
+            return self._clone_and_analyze(self.current_repo_url)
+            
         return None
     
     def _clone_and_analyze(self, repo_url: str):
