@@ -14,10 +14,7 @@ from agno.tools.reasoning import ReasoningTools
 class PRDAgent:
     """Agent responsible for analyzing issues and creating PRDs."""
     
-    def __init__(self, model_id: str = "anthropic.claude-3-5-sonnet-20240620-v1", session = None):
-        if session is None:
-            session = boto3.Session()
-            
+    def __init__(self, model_id: str, session):
         self.agent = Agent(
             name="prd_creator",
             role="Product Requirements Document Creator",
@@ -133,37 +130,7 @@ class PRDAgent:
             return response.content if hasattr(response, 'content') else str(response)
         except Exception as e:
             print(f"Error generating PRD: {e}")
-            # Fallback to template-based PRD if agent fails
-            return f"""
-            # Product Requirements Document
-            
-            ## Issue Reference
-            Repository: {repo_name}
-            Issue: {issue_number}
-            
-            ## Problem Statement
-            Implementation needed for issue: {issue_url}
-            
-            ## Solution Overview
-            A solution needs to be implemented based on the issue description.
-            
-            ## Functional Requirements
-            1. Implement the functionality described in the issue
-            
-            ## Technical Requirements
-            1. Follow project coding standards
-            2. Ensure proper error handling
-            
-            ## Implementation Tasks
-            1. Analyze the issue and implement a solution (Priority: high)
-            2. Write tests for the implementation (Priority: medium, Depends on: 1)
-            3. Update documentation (Priority: low, Depends on: 1)
-            
-            ## Acceptance Criteria
-            1. Code passes all tests
-            2. PR is approved by reviewers
-            3. Documentation is updated
-            """
+            raise ValueError(f"Failed to generate PRD: {e}")
     
     # Alias for backward compatibility
     create_prd = create_prd_from_issue

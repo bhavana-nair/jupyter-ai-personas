@@ -301,104 +301,236 @@ class PRCreationPersona(BasePersona):
     
     async def _process_issue(self, issue_url: str):
         """Process a GitHub issue to create PRD and tasks."""
-        self._initialize_taskmaster()
-        
-        # Extract repo URL from issue URL
-        repo_match = re.search(r'(https://github\.com/[^/]+/[^/]+)/', issue_url)
-        if repo_match:
-            self.current_repo_url = repo_match.group(1)
-        
-        self.current_issue_url = issue_url
-        
-        # Create PRD from issue
-        self.current_prd = await self.prd_agent.create_prd_from_issue(issue_url)
-        
-        # Create tasks from PRD
-        self.current_tasks = await self.taskmaster.create_tasks_from_prd(self.current_prd)
-        
-        # Auto-analyze repository
-        self._auto_analyze_repo(issue_url)
-        
-        # Format response
-        response = f"## Issue Processed Successfully\n\n"
-        response += f"Issue URL: {issue_url}\n\n"
-        response += f"### PRD Created\n\n"
-        response += f"{self.current_prd[:500]}...\n\n"  # Show first 500 chars of PRD
-        response += f"### Tasks Created\n\n"
-        response += self.taskmaster.format_tasks_for_agents(self.current_tasks)
-        response += f"\n\nYou can now use commands like:\n"
-        response += f"- 'show task details for #1' to see details of a specific task\n"
-        response += f"- 'implement task #1' to implement a specific task\n"
-        response += f"- 'list tasks' to list all tasks\n"
-        
-        return response
+        try:
+            print(f"Processing issue: {issue_url}")
+            self._initialize_taskmaster()
+            
+            # Extract repo URL from issue URL
+            repo_match = re.search(r'(https://github\.com/[^/]+/[^/]+)/', issue_url)
+            if repo_match:
+                self.current_repo_url = repo_match.group(1)
+                print(f"Extracted repo URL: {self.current_repo_url}")
+            
+            self.current_issue_url = issue_url
+            
+            # Create PRD from issue
+            print("Creating PRD from issue...")
+            self.current_prd = await self.prd_agent.create_prd_from_issue(issue_url)
+            print(f"PRD created successfully! Length: {len(self.current_prd)} chars")
+            
+            # Save PRD to file for debugging
+            with open("generated_prd.md", "w") as f:
+                f.write(self.current_prd)
+            print("PRD saved to generated_prd.md")
+            
+            # Create tasks from PRD
+            print("Creating tasks from PRD...")
+            self.current_tasks = await self.taskmaster.create_tasks_from_prd(self.current_prd)
+            print(f"Created {len(self.current_tasks)} tasks successfully!")
+            
+            # Auto-analyze repository
+            print("Auto-analyzing repository...")
+            self._auto_analyze_repo(issue_url)
+            print("Repository analysis complete")
+            
+            # Get available tasks (no dependencies)
+            available_tasks = self.taskmaster.get_available_tasks()
+            print(f"Found {len(available_tasks)} available tasks with no dependencies")
+            
+            # Format response
+            response = f"## Issue Processed Successfully\n\n"
+            response += f"Issue URL: {issue_url}\n\n"
+            response += f"### PRD Created\n\n"
+            response += f"{self.current_prd[:500]}...\n\n"  # Show first 500 chars of PRD
+            response += f"### Tasks Created\n\n"
+            response += self.taskmaster.format_tasks_for_agents(self.current_tasks)
+            
+            # Highlight available tasks
+            response += f"\n\n### Ready to Implement Tasks\n"
+            if available_tasks:
+                response += f"These tasks have no unmet dependencies and can be implemented immediately:\n\n"
+                response += self.taskmaster.format_tasks_for_agents(available_tasks)
+                
+                # Add quick links to details and implementation
+                response += f"\n\nQuick Actions:\n"
+                for task in available_tasks[:3]:  # Limit to first 3 tasks to avoid too long response
+                    response += f"- Show details: 'show task details for #{task.id}'\n"
+                    response += f"- Implement: 'implement task #{task.id}'\n"
+            else:
+                response += f"No tasks are currently ready for implementation.\n"
+            
+            response += f"\n\nYou can now use commands like:\n"
+            response += f"- 'show task details for #1' to see details of a specific task\n"
+            response += f"- 'implement task #1' to implement a specific task\n"
+            response += f"- 'list tasks' to list all tasks\n"
+            
+            return response
+            
+        except Exception as e:
+            import traceback
+            error_trace = traceback.format_exc()
+            print(f"Error in _process_issue: {e}\n{error_trace}")
+            return f"## Error Processing Issue\n\nAn error occurred while processing the issue: {str(e)}\n\nPlease try again or contact support."
     
     async def _show_task_details(self, task_id: str):
         """Show details for a specific task."""
-        self._initialize_taskmaster()
-        
-        if not self.current_tasks:
-            return "No tasks available. Please process an issue first."
-        
-        task_details = self.taskmaster.get_task_details(task_id)
-        return f"## Task Details\n\n{task_details}"
+        try:
+            self._initialize_taskmaster()
+            
+            if not self.current_tasks:
+                return "No tasks available. Please process an issue first."
+            
+            task = self.taskmaster.get_task_by_id(task_id)
+            if not task:
+                return f"Task with ID {task_id} not found."
+                
+            task_details = self.taskmaster.get_task_details(task_id)
+            
+            # Add implementation option if task is available
+            available_tasks = self.taskmaster.get_available_tasks()
+            if task in available_tasks:
+                task_details += f"\n\n**This task has no unmet dependencies and can be implemented immediately.**\n"
+                task_details += f"\nTo implement this task, type: 'implement task #{task_id}'\n"
+            else:
+                # Show dependencies that need to be completed first
+                if task.dependencies:
+                    task_details += f"\n\n**This task has dependencies that must be completed first:**\n"
+                    for dep_id in task.dependencies:
+                        dep_task = self.taskmaster.get_task_by_id(dep_id)
+                        status = "✅ Completed" if dep_task and dep_task.status == "done" else "⏳ Pending"
+                        task_details += f"- Task #{dep_id}: {status}\n"
+            
+            return f"## Task Details\n\n{task_details}"
+            
+        except Exception as e:
+            import traceback
+            error_trace = traceback.format_exc()
+            print(f"Error in _show_task_details: {e}\n{error_trace}")
+            return f"## Error Showing Task Details\n\nAn error occurred while showing task details: {str(e)}\n\nPlease try again or contact support."
     
     async def _implement_task(self, task_id: str):
         """Implement a specific task."""
-        self._initialize_taskmaster()
-        
-        if not self.current_tasks:
-            return "No tasks available. Please process an issue first."
-        
-        task = self.taskmaster.get_task_by_id(task_id)
-        if not task:
-            return f"Task with ID {task_id} not found."
-        
-        # Check if task dependencies are met
-        available_tasks = self.taskmaster.get_available_tasks()
-        if task not in available_tasks:
-            return f"Task {task_id} has unmet dependencies. Please implement its dependencies first."
-        
-        # Create system prompt with task details
-        system_prompt = f"""
-        Implement the following task:
-        
-        Task ID: {task.id}
-        Title: {task.title}
-        Description: {task.description}
-        Priority: {task.priority}
-        
-        Repository URL: {self.current_repo_url}
-        Issue URL: {self.current_issue_url}
-        
-        PRD Context:
-        {self.current_prd[:1000]}...
-        """
-        
-        # Initialize team for task implementation
-        team = self.initialize_team(system_prompt)
-        
-        # Run the team to implement the task
-        response = team.run(
-            f"Implement task #{task.id}: {task.title}",
-            stream=False,
-            stream_intermediate_steps=True,
-            show_full_reasoning=True
-        )
-        
-        # Update task status
-        self.taskmaster.update_task_status(task_id, "done")
-        
-        return response.content
+        try:
+            print(f"Implementing task #{task_id}...")
+            self._initialize_taskmaster()
+            
+            if not self.current_tasks:
+                return "No tasks available. Please process an issue first."
+            
+            task = self.taskmaster.get_task_by_id(task_id)
+            if not task:
+                return f"Task with ID {task_id} not found."
+            
+            # Check if task dependencies are met
+            available_tasks = self.taskmaster.get_available_tasks()
+            if task not in available_tasks:
+                # Show which dependencies need to be completed
+                unmet_deps = []
+                for dep_id in task.dependencies:
+                    dep_task = self.taskmaster.get_task_by_id(dep_id)
+                    if dep_task and dep_task.status != "done":
+                        unmet_deps.append(dep_id)
+                
+                response = f"## Task {task_id} Has Unmet Dependencies\n\n"
+                response += f"The following dependencies must be completed first:\n\n"
+                
+                for dep_id in unmet_deps:
+                    dep_task = self.taskmaster.get_task_by_id(dep_id)
+                    if dep_task:
+                        response += f"- Task #{dep_id}: {dep_task.title}\n"
+                        response += f"  To implement: 'implement task #{dep_id}'\n"
+                
+                return response
+            
+            print(f"Task #{task_id} is available for implementation")
+            
+            # Create system prompt with task details
+            system_prompt = f"""
+            Implement the following task:
+            
+            Task ID: {task.id}
+            Title: {task.title}
+            Description: {task.description}
+            Priority: {task.priority}
+            
+            Repository URL: {self.current_repo_url}
+            Issue URL: {self.current_issue_url}
+            
+            PRD Context:
+            {self.current_prd[:1000]}...
+            """
+            
+            # Initialize team for task implementation
+            print(f"Initializing implementation team for task #{task_id}")
+            team = self.initialize_team(system_prompt)
+            
+            # Run the team to implement the task
+            print(f"Running implementation team for task #{task_id}")
+            response = team.run(
+                f"Implement task #{task.id}: {task.title}",
+                stream=False,
+                stream_intermediate_steps=True,
+                show_full_reasoning=True
+            )
+            
+            # Update task status
+            print(f"Updating task #{task_id} status to done")
+            self.taskmaster.update_task_status(task_id, "done")
+            
+            # Check if new tasks are now available
+            new_available_tasks = self.taskmaster.get_available_tasks()
+            newly_available = [t for t in new_available_tasks if t not in available_tasks]
+            
+            result = response.content
+            
+            # Add information about newly available tasks
+            if newly_available:
+                result += f"\n\n## New Tasks Available\n\n"
+                result += f"The following tasks are now available for implementation:\n\n"
+                result += self.taskmaster.format_tasks_for_agents(newly_available)
+            
+            return result
+            
+        except Exception as e:
+            import traceback
+            error_trace = traceback.format_exc()
+            print(f"Error in _implement_task: {e}\n{error_trace}")
+            return f"## Error Implementing Task\n\nAn error occurred while implementing the task: {str(e)}\n\nPlease try again or contact support."
     
     async def _list_tasks(self):
         """List all tasks."""
-        self._initialize_taskmaster()
-        
-        if not self.current_tasks:
-            return "No tasks available. Please process an issue first."
-        
-        return f"## All Tasks\n\n{self.taskmaster.format_tasks_for_agents(self.current_tasks)}"
+        try:
+            self._initialize_taskmaster()
+            
+            if not self.current_tasks:
+                return "No tasks available. Please process an issue first."
+            
+            # Get available tasks (no dependencies)
+            available_tasks = self.taskmaster.get_available_tasks()
+            
+            response = f"## All Tasks\n\n{self.taskmaster.format_tasks_for_agents(self.current_tasks)}"
+            
+            # Add section for available tasks
+            response += f"\n\n## Ready to Implement Tasks\n"
+            if available_tasks:
+                response += f"These tasks have no unmet dependencies and can be implemented immediately:\n\n"
+                response += self.taskmaster.format_tasks_for_agents(available_tasks)
+                
+                # Add quick links to details and implementation
+                response += f"\n\nQuick Actions:\n"
+                for task in available_tasks[:3]:  # Limit to first 3 tasks to avoid too long response
+                    response += f"- Show details: 'show task details for #{task.id}'\n"
+                    response += f"- Implement: 'implement task #{task.id}'\n"
+            else:
+                response += f"No tasks are currently ready for implementation.\n"
+            
+            return response
+            
+        except Exception as e:
+            import traceback
+            error_trace = traceback.format_exc()
+            print(f"Error in _list_tasks: {e}\n{error_trace}")
+            return f"## Error Listing Tasks\n\nAn error occurred while listing tasks: {str(e)}\n\nPlease try again or contact support."
     
     async def _standard_pr_creation(self, message_body, system_prompt):
         """Standard PR creation workflow."""

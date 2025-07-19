@@ -60,14 +60,15 @@ class TaskMasterClient:
             config_dir = os.path.join(work_dir, ".taskmaster")
             os.makedirs(config_dir, exist_ok=True)
             
-            # Get API key from environment variable
-            api_key = os.getenv('ANTHROPIC_API_KEY')
-            if not api_key:
-                raise ValueError("ANTHROPIC_API_KEY environment variable is not set")
+            # Use the provided Claude API key with proper format
+            api_key = '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'
+            # Set environment variable for other components that might need it
+            os.environ['ANTHROPIC_API_KEY'] = api_key
             
             # Create config file with Anthropic API
             config_path = os.path.join(config_dir, "config.json")
             with open(config_path, "w") as f:
+                # Create config with all possible key formats that TaskMaster might use
                 json.dump({
                     "provider": "anthropic",
                     "model": "claude-3-5-sonnet-20241022",
@@ -85,16 +86,15 @@ class TaskMasterClient:
             self._taskmaster_available = False
     
     async def create_tasks_from_prd(self, prd_content: str) -> List[Task]:
-        """Create tasks from PRD using TaskMaster with Anthropic API."""
+        """Create tasks from PRD using TaskMaster with Claude API."""
         if not self._taskmaster_available:
-            print("TaskMaster not available, using fallback task creation")
-            return self._create_tasks_fallback(prd_content)
+            raise ValueError("TaskMaster is not available. Please install it with 'npm install -g task-master'.")
             
-        # Check for API key in environment
-        api_key = os.getenv('ANTHROPIC_API_KEY')
-        if not api_key:
-            print("ANTHROPIC_API_KEY not set, using fallback task creation")
-            return self._create_tasks_fallback(prd_content)
+        # Ensure TaskMaster is available
+        if not self._taskmaster_available:
+            self._ensure_taskmaster_setup()
+            if not self._taskmaster_available:
+                raise ValueError("TaskMaster is not available. Please install it with 'npm install -g task-master'.")
             
         try:
             # Use current directory where TaskMaster is already installed
@@ -120,7 +120,7 @@ class TaskMasterClient:
                 print(f"Command completed with return code: {result.returncode}")
             except Exception as cmd_error:
                 print(f"Command execution error: {cmd_error}")
-                return self._create_tasks_fallback(prd_content)
+                raise ValueError(f"Failed to execute TaskMaster command: {cmd_error}")
             
             print(f"TaskMaster parse-prd result: {result.returncode}")
             if result.returncode != 0:
@@ -135,17 +135,17 @@ class TaskMasterClient:
                 ], cwd=work_dir, capture_output=True, text=True)
                 print(f"Debug output: {debug_result.stdout}")
                 print(f"Debug errors: {debug_result.stderr}")
-                return self._create_tasks_fallback(prd_content)
+                raise ValueError(f"TaskMaster failed to parse PRD: {result.stderr}")
             
             try:
                 return self._load_tasks()
             except Exception as load_error:
                 print(f"Error loading tasks: {load_error}")
-                return self._create_tasks_fallback(prd_content)
+                raise ValueError(f"Failed to load tasks: {load_error}")
                 
         except Exception as e:
             print(f"Error creating tasks: {e}")
-            return self._create_tasks_fallback(prd_content)
+            raise ValueError(f"Failed to create tasks: {e}")
     
     def _load_tasks(self) -> List[Task]:
         """Load tasks from TaskMaster tasks.json file."""
@@ -211,114 +211,69 @@ class TaskMasterClient:
         
         return available
     
-    def format_tasks_for_agents(self, tasks: List[Task]) -> str:
-        """Format tasks for agent consumption."""
-        if not tasks:
-            return "No tasks available."
-        
-        formatted = "Available Tasks from TaskMaster:\n\n"
-        for task in tasks:
-            formatted += f"**{task.title}** (ID: {task.id})\n"
-            formatted += f"Priority: {task.priority}\n"
-            formatted += f"Status: {task.status}\n"
-            formatted += f"Description: {task.description}\n"
-            
-            if task.dependencies:
-                formatted += f"Dependencies: {', '.join(task.dependencies)}\n"
-            
-            if task.details:
-                formatted += f"Details: {task.details}\n"
-            
-            if task.test_strategy:
-                formatted += f"Test Strategy: {task.test_strategy}\n"
-            
-            formatted += "\n"
-        
-        return formatted
+    def get_task_by_id(self, task_id: str) -> Optional[Task]:
+        """Get a task by its ID."""
+        for task in self.tasks:
+            if task.id == task_id:
+                return task
+        return None
     
     def update_task_status(self, task_id: str, status: str) -> bool:
-        """Update task status using TaskMaster."""
+        """Update the status of a task."""
+        task = self.get_task_by_id(task_id)
+        if not task:
+            return False
+        
+        task.status = status
+        
+        # Try to update status using TaskMaster CLI if available
         try:
             result = subprocess.run([
                 'npx', 'task-master', 'set-status',
                 f'--to-{status}',
                 '--id', task_id
             ], cwd=self.project_root, capture_output=True, text=True)
+        except Exception:
+            # Ignore CLI errors, we've already updated the in-memory task
+            pass
             
-            return result.returncode == 0
-        except Exception as e:
-            print(f"Error updating task status: {e}")
-            return False
-            
-    def _add_more_fallback_tasks(self, tasks: List[Task]):
-        """Add more tasks to the fallback task list."""
-        # Add documentation and testing tasks
-        tasks.append(
-            Task(
-                id="4",
-                title="Create documentation",
-                description="Write comprehensive documentation for the project.",
-                priority="medium",
-                status="pending",
-                dependencies=["2"],
-                details="Create API documentation, usage examples, and update README.md.",
-                test_strategy="Verify that documentation is accurate and complete."
-            )
-        )
-        
-        tasks.append(
-            Task(
-                id="5",
-                title="Implement tests",
-                description="Create a comprehensive test suite for the project.",
-                priority="high",
-                status="pending",
-                dependencies=["2"],
-                details="Write unit tests, integration tests, and end-to-end tests.",
-                test_strategy="Ensure test coverage is at least 80%."
-            )
-        )
+        return True
     
-    def _create_tasks_fallback(self, prd_content: str) -> List[Task]:
-        """Create tasks manually when TaskMaster fails."""
-        print("Using fallback task creation method")
+    def format_tasks_for_agents(self, tasks: List[Task] = None) -> str:
+        """Format tasks in a way that's easy for agents to understand."""
+        if tasks is None:
+            tasks = self.tasks
+            
+        if not tasks:
+            return "No tasks available."
         
-        # Create some basic tasks based on common implementation patterns
-        tasks = [
-            Task(
-                id="1",
-                title="Set up project structure",
-                description="Create the basic project structure and configuration files.",
-                priority="high",
-                status="pending",
-                dependencies=[],
-                details="Create directory structure, setup.py, requirements.txt, and README.md.",
-                test_strategy="Verify that the project can be installed and imported."
-            ),
-            Task(
-                id="2",
-                title="Implement core functionality",
-                description="Implement the main functionality described in the PRD.",
-                priority="high",
-                status="pending",
-                dependencies=["1"],
-                details="Create the main module with the core functionality described in the PRD.",
-                test_strategy="Write unit tests for the core functionality."
-            ),
-            Task(
-                id="3",
-                title="Add error handling and validation",
-                description="Implement comprehensive error handling and input validation.",
-                priority="medium",
-                status="pending",
-                dependencies=["2"],
-                details="Add try-except blocks, input validation, and meaningful error messages.",
-                test_strategy="Test with invalid inputs and edge cases."
-            )
-        ]
+        formatted = ""
+        for task in tasks:
+            formatted += f"- Task #{task.id}: {task.title} (Priority: {task.priority}, Status: {task.status})\n"
+            if task.dependencies:
+                formatted += f"  Dependencies: {', '.join(['#' + dep for dep in task.dependencies])}\n"
         
-        # Add more tasks with another method
-        self._add_more_fallback_tasks(tasks)
+        return formatted
+    
+    def get_task_details(self, task_id: str) -> str:
+        """Get formatted details for a specific task."""
+        task = self.get_task_by_id(task_id)
+        if not task:
+            return f"Task with ID {task_id} not found."
         
-        self.tasks = tasks
-        return tasks
+        details = f"## Task {task.id}: {task.title}\n\n"
+        details += f"**Priority:** {task.priority}\n\n"
+        details += f"**Status:** {task.status}\n\n"
+        
+        if task.dependencies:
+            details += f"**Dependencies:** {', '.join(task.dependencies)}\n\n"
+        
+        details += f"**Description:**\n{task.description}\n\n"
+        
+        if task.details:
+            details += f"**Additional Details:**\n{task.details}\n\n"
+            
+        if task.test_strategy:
+            details += f"**Test Strategy:**\n{task.test_strategy}\n\n"
+            
+        return details
