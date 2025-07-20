@@ -169,7 +169,17 @@ class PRReviewPersona(BasePersona):
             markdown=True
         )
 
-        security_checker = Agent(name="security_checker",
+    def _create_security_agent(self, model_id: str) -> Agent:
+        """Create the security analysis agent.
+        
+        Args:
+            model_id (str): The AWS Bedrock model ID to use
+            
+        Returns:
+            Agent: Configured security analysis agent
+        """
+        return Agent(
+            name="security_checker",
             role="Security Analyst",
             model=AwsBedrock(
                 id=model_id,
