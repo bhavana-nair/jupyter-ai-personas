@@ -1,22 +1,52 @@
 import os
 import json
+from time import sleep
+from typing import List, Dict, Optional
 from agno.tools import Toolkit
 from agno.utils.log import logger
 import re
 from github import Github
 import requests
+from ratelimit import limits, sleep_and_retry
 from agno.agent import Agent
+
+GITHUB_RATE_LIMIT = 5000  # GitHub API rate limit per hour
+CALLS_PER_HOUR = GITHUB_RATE_LIMIT
+
+@sleep_and_retry
+@limits(calls=CALLS_PER_HOUR, period=3600)
+def rate_limited_request(url: str, headers: Dict[str, str]) -> requests.Response:
+    """Make a rate-limited request to the GitHub API"""
+    response = requests.get(url, headers=headers)
+    if response.status_code == 403 and 'rate limit exceeded' in response.text.lower():
+        logger.warning("GitHub API rate limit exceeded. Waiting...")
+        sleep(3600)  # Wait for rate limit reset
+        response = requests.get(url, headers=headers)
+    return response
 
 class CITools(Toolkit):
     def __init__(self, **kwargs):
-        self.github_token = os.getenv("GITHUB_ACCESS_TOKEN")
-
-        if not self.github_token:
-            logger.warning("GITHUB_ACCESS_TOKEN environment variable is not set. GitHub operations will be limited.")
+        # Securely retrieve and validate GitHub token
+        self.github_token = self._validate_github_token()
+        
         super().__init__(name="ci_tools", tools=[
             self.fetch_ci_failure_data,
             self.get_ci_logs
         ],  **kwargs)
+
+    def _validate_github_token(self) -> Optional[str]:
+        """Validate GitHub access token from environment variables"""
+        token = os.getenv("GITHUB_ACCESS_TOKEN")
+        if not token:
+            logger.warning("GITHUB_ACCESS_TOKEN environment variable is not set. GitHub operations will be limited.")
+            return None
+        
+        # Basic token format validation
+        if not re.match(r'^(gh[ps]_[a-zA-Z0-9]{36}|github_pat_[a-zA-Z0-9]{22}_[a-zA-Z0-9]{59})$', token):
+            logger.warning("Invalid GitHub token format. Please check your token.")
+            return None
+            
+        return token
 
     async def fetch_ci_failure_data(self, agent: Agent,  repo_url: str, pr_number: int) -> list:
         """
