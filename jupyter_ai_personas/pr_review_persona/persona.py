@@ -95,7 +95,17 @@ class PRReviewPersona(BasePersona):
         if not github_token:
             raise ValueError("GITHUB_ACCESS_TOKEN environment variable is not set. Please set it with a plain GitHub personal access token (not GitHub Actions syntax).")
 
-        code_quality = Agent(name="code_quality",
+    def _create_code_quality_agent(self, model_id: str) -> Agent:
+        """Create the code quality analysis agent.
+        
+        Args:
+            model_id (str): The AWS Bedrock model ID to use
+            
+        Returns:
+            Agent: Configured code quality analysis agent
+        """
+        return Agent(
+            name="code_quality",
             role="Code Quality Analyst",
             model=AwsBedrock(
                 id=model_id,
