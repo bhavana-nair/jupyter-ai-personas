@@ -1,4 +1,5 @@
 import os
+import logging
 from jupyter_ai.personas.base_persona import BasePersona, PersonaDefaults
 from jupyterlab_chat.models import Message
 from jupyter_ai.history import YChatHistory
@@ -14,10 +15,17 @@ from .fetch_ci_failures import fetch_ci_failures
 from .template import PRPersonaVariables, PR_PROMPT_TEMPLATE
 from .pr_comment_tool import create_inline_pr_comments
 
+logger = logging.getLogger(__name__)
+
 session = boto3.Session()
 
 
 class PRReviewPersona(BasePersona):
+    # Heartbeat intervals in seconds
+    FIRST_HEARTBEAT_DELAY = 120
+    SECOND_HEARTBEAT_DELAY = 180
+    THIRD_HEARTBEAT_DELAY = 300
+    
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
@@ -216,21 +224,26 @@ class PRReviewPersona(BasePersona):
             import threading
 
             # Flag to stop heartbeat when done
-            processing = threading.Event()
+            processing = asyncio.Event()
             processing.set()
 
             async def heartbeat():
-                await asyncio.sleep(120)
-                if processing.is_set():
-                    self.send_message("⏳ Still processing large PR...")
-                    await asyncio.sleep(180)
+                try:
+                    await asyncio.sleep(self.FIRST_HEARTBEAT_DELAY)
                     if processing.is_set():
-                        self.send_message("⏳ Almost done...")
-                        await asyncio.sleep(300)
+                        self.send_message("⏳ Still processing large PR...")
+                        await asyncio.sleep(self.SECOND_HEARTBEAT_DELAY)
                         if processing.is_set():
-                            self.send_message(
-                                "⏳ Taking longer than expected, please wait..."
-                            )
+                            self.send_message("⏳ Almost done...")
+                            await asyncio.sleep(self.THIRD_HEARTBEAT_DELAY)
+                            if processing.is_set():
+                                self.send_message(
+                                    "⏳ Taking longer than expected, please wait..."
+                                )
+                except asyncio.CancelledError:
+                    # Handle task cancellation gracefully
+                    logger.debug("Heartbeat task cancelled")
+                    raise  # Re-raise to properly terminate the task
 
             heartbeat_task = asyncio.create_task(heartbeat())
 

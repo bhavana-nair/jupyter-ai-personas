@@ -1,5 +1,6 @@
 from typing import Any, Dict, List
 from github import Github
+from github.GithubException import GithubException
 from os import getenv
 from agno.tools import tool
 import logging
@@ -58,6 +59,8 @@ def create_inline_pr_comments(
         try:
             pr.create_review(body=summary, event="COMMENT")
             logger.debug("Created summary review")
+        except GithubException as e:
+            logger.warning(f"Summary creation failed: GitHub API error {e.status} - {e.data.get('message', '')}")
         except Exception as e:
             logger.warning(f"Summary creation failed: {str(e)}")
 
@@ -100,16 +103,25 @@ def create_inline_pr_comments(
                     comment_urls.append(comment.html_url)
                     logger.info(f"Comment {i + 1}: Successfully created inline comment")
                     continue
+                except GithubException as inline_error:
+                    logger.warning(
+                        f"Comment {i + 1}: GitHub API error {inline_error.status} - {inline_error.data.get('message', '')}"
+                    )
+                    error_msg = f"Comment {i + 1} failed: GitHub API error {inline_error.status}"
+                    errors.append(error_msg)
+                    logger.error(error_msg)
                 except Exception as inline_error:
                     logger.warning(
                         f"Comment {i + 1}: Inline failed: {str(inline_error)}"
                     )
+                    error_msg = f"Comment {i + 1} failed: {str(inline_error)}"
+                    errors.append(error_msg)
+                    logger.error(error_msg)
 
-                # If inline fails, just log and skip
-                error_msg = f"Comment {i + 1} failed: {str(inline_error)}"
+            except GithubException as e:
+                error_msg = f"Comment {i + 1} failed: GitHub API error {e.status} - {e.data.get('message', '')}"
                 errors.append(error_msg)
                 logger.error(error_msg)
-
             except Exception as e:
                 error_msg = f"Comment {i + 1} failed: {str(e)}"
                 errors.append(error_msg)
@@ -123,5 +135,7 @@ def create_inline_pr_comments(
             result += f", {error_count} failed: {'; '.join(errors[:3])}"
 
         return result
+    except GithubException as e:
+        return f"GitHub API Error {e.status}: {e.data.get('message', '')}"
     except Exception as e:
         return f"Error: {str(e)}"
