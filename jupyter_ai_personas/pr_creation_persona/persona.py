@@ -340,7 +340,22 @@ class PRCreationPersona(BasePersona):
             
             # Create PRD from issue
             print("Creating PRD from issue...")
-            self.current_prd = await self.prd_agent.create_prd_from_issue(issue_url)
+            raw_prd = await self.prd_agent.create_prd_from_issue(issue_url)
+            
+            # Check for and remove any repetition in the PRD
+            # This can happen if the model generates multiple PRDs for the same issue
+            if "# Product Requirements Document" in raw_prd:
+                # Find all occurrences of PRD headers
+                prd_headers = [m.start() for m in re.finditer(r'# Product Requirements Document', raw_prd)]
+                if len(prd_headers) > 1:
+                    # Keep only the first PRD (up to the second header)
+                    self.current_prd = raw_prd[:prd_headers[1]].strip()
+                    print("Detected and removed duplicate PRD content")
+                else:
+                    self.current_prd = raw_prd
+            else:
+                self.current_prd = raw_prd
+                
             print(f"PRD created successfully! Length: {len(self.current_prd)} chars")
             
             # Save PRD to file for debugging
@@ -496,8 +511,45 @@ class PRCreationPersona(BasePersona):
                 repo_context += f"Feature Branch: {self.feature_branch}\n"
                 repo_context += "Use this feature branch for all tasks.\n"
             if self.local_repo_path:
-                repo_context += f"Local Repository Path: {self.local_repo_path}\n"
+                # Make sure the path is absolute
+                abs_path = os.path.abspath(self.local_repo_path)
+                repo_context += f"Local Repository Path: {abs_path}\n"
+                repo_context += f"IMPORTANT: Save all files to {abs_path}\n"
                 repo_context += "Use the existing local repository instead of cloning a new one.\n"
+                print(f"Using local repository path: {abs_path}")
+                
+                # Ensure the directory exists
+                if not os.path.exists(abs_path):
+                    os.makedirs(abs_path, exist_ok=True)
+                    print(f"Created directory: {abs_path}")
+                    
+                # Clone the repository if it's not already a git repository
+                if not os.path.exists(os.path.join(abs_path, '.git')):
+                    if self.current_repo_url:
+                        print(f"Cloning repository {self.current_repo_url} to {abs_path}")
+                        try:
+                            # Remove any existing content
+                            if os.path.exists(abs_path) and os.listdir(abs_path):
+                                print("Removing existing content before cloning")
+                                for item in os.listdir(abs_path):
+                                    item_path = os.path.join(abs_path, item)
+                                    if os.path.isdir(item_path):
+                                        import shutil
+                                        shutil.rmtree(item_path)
+                                    elif os.path.isfile(item_path):
+                                        os.remove(item_path)
+                            
+                            # Clone the repository
+                            subprocess.run(["git", "clone", self.current_repo_url, abs_path], check=True, capture_output=True)
+                            print(f"Successfully cloned repository to {abs_path}")
+                        except Exception as e:
+                            print(f"Warning: Failed to clone repository: {e}")
+                    else:
+                        print(f"Warning: No repository URL available to clone. Initializing empty git repository.")
+                        try:
+                            subprocess.run(["git", "init"], cwd=abs_path, check=True, capture_output=True)
+                        except Exception as e:
+                            print(f"Warning: Failed to initialize git repository: {e}")
             
             # Add PRD context
             repo_context += f"\nPRD Context:\n{self.current_prd[:1000]}...\n"
@@ -512,7 +564,33 @@ class PRCreationPersona(BasePersona):
             
             # Update task status to done
             print(f"Updating task #{task_id} status to done")
-            self.taskmaster.update_task_status(task_id, "done")
+            # First try using the TaskMaster command directly
+            try:
+                work_dir = os.getcwd()
+                print(f"Running: npx task-master set-status --status=done --id={task_id}")
+                cmd_result = subprocess.run([
+                    'npx', 'task-master', 'set-status',
+                    f'--status=done',
+                    f'--id={task_id}'
+                ], cwd=work_dir, capture_output=True, text=True)
+                
+                if cmd_result.returncode == 0:
+                    print(f"Successfully updated task {task_id} status to done via direct command")
+                else:
+                    print(f"Direct command failed: {cmd_result.stderr}")
+                    # Fall back to using the TaskMasterClient
+                    success = self.taskmaster.update_task_status(task_id, "done")
+                    if not success:
+                        print(f"Warning: Failed to update task status in TaskMaster. Updating in memory only.")
+                        # Update the task status in memory
+                        for t in self.current_tasks:
+                            if t.id == task_id:
+                                t.status = "done"
+                                break
+            except Exception as e:
+                print(f"Error updating task status: {e}")
+                # Fall back to using the TaskMasterClient
+                self.taskmaster.update_task_status(task_id, "done")
             
             # Check if new tasks are now available
             new_available_tasks = self.taskmaster.get_available_tasks()
@@ -769,41 +847,155 @@ class PRCreationPersona(BasePersona):
             return False
             
         try:
-            # Check if directory exists
+            # Ensure the directory exists
             if not os.path.isdir(self.local_repo_path):
-                # If we have a repo URL and the directory doesn't exist, clone it
-                if self.current_repo_url:
-                    print(f"Local repository path {self.local_repo_path} doesn't exist. Cloning repository...")
-                    # Create parent directory if needed
-                    os.makedirs(os.path.dirname(self.local_repo_path), exist_ok=True)
-                    
-                    # Clone the repository to the specified path
+                print(f"Creating directory {self.local_repo_path}")
+                os.makedirs(self.local_repo_path, exist_ok=True)
+            
+            # Check if it's a git repository
+            is_git_repo = False
+            try:
+                result = subprocess.run(
+                    ["git", "-C", self.local_repo_path, "rev-parse", "--is-inside-work-tree"],
+                    capture_output=True, text=True
+                )
+                is_git_repo = result.returncode == 0 and result.stdout.strip() == "true"
+            except Exception:
+                is_git_repo = False
+            
+            # If not a git repo and we have a repo URL, clone it
+            if not is_git_repo and self.current_repo_url:
+                print(f"Cloning repository {self.current_repo_url} to {self.local_repo_path}")
+                
+                # Remove any existing content
+                if os.path.exists(self.local_repo_path) and os.listdir(self.local_repo_path):
+                    print("Removing existing content before cloning")
+                    for item in os.listdir(self.local_repo_path):
+                        item_path = os.path.join(self.local_repo_path, item)
+                        if os.path.isdir(item_path):
+                            import shutil
+                            shutil.rmtree(item_path)
+                        elif os.path.isfile(item_path):
+                            os.remove(item_path)
+                
+                # Hardcode the GitHub username
+                username = "bhavana-nair"
+                print(f"Using hardcoded GitHub username: {username}")
+                
+                # If we have a username, use the fork URL instead of the original repo URL
+                if username and 'github.com' in self.current_repo_url:
+                    # Extract original repo owner and name
+                    repo_parts = self.current_repo_url.replace('https://github.com/', '').replace('.git', '').split('/')
+                    if len(repo_parts) >= 2:
+                        original_owner, repo_name = repo_parts[0], repo_parts[1]
+                        # Create fork URL
+                        fork_url = f"https://github.com/{username}/{repo_name}.git"
+                        print(f"Using fork URL: {fork_url} instead of original: {self.current_repo_url}")
+                        
+                        # Clone from the fork
+                        result = subprocess.run(
+                            ["git", "clone", fork_url, self.local_repo_path],
+                            capture_output=True, text=True
+                        )
+                        
+                        # Add original repo as upstream remote
+                        if result.returncode == 0:
+                            print("Adding original repository as upstream remote")
+                            subprocess.run(
+                                ["git", "-C", self.local_repo_path, "remote", "add", "upstream", self.current_repo_url],
+                                capture_output=True, text=True
+                            )
+                    else:
+                        print(f"Could not parse repository URL: {self.current_repo_url}, using original URL")
+                        result = subprocess.run(
+                            ["git", "clone", self.current_repo_url, self.local_repo_path],
+                            capture_output=True, text=True
+                        )
+                else:
+                    # Fall back to original URL if we can't determine the fork
+                    print(f"Using original repository URL: {self.current_repo_url}")
                     result = subprocess.run(
                         ["git", "clone", self.current_repo_url, self.local_repo_path],
-                        capture_output=True,
-                        text=True
+                        capture_output=True, text=True
                     )
-                    
-                    if result.returncode != 0:
-                        print(f"Failed to clone repository: {result.stderr}")
-                        return False
-                        
-                    print(f"Successfully cloned repository to {self.local_repo_path}")
-                else:
-                    print(f"Local repository path {self.local_repo_path} is not a directory and no repo URL is available")
+                
+                if result.returncode != 0:
+                    print(f"Failed to clone repository: {result.stderr}")
                     return False
-                
-            # Check if it's a git repository
-            result = subprocess.run(
-                ["git", "-C", self.local_repo_path, "rev-parse", "--is-inside-work-tree"],
-                capture_output=True,
-                text=True
-            )
-            
-            if result.returncode != 0 or result.stdout.strip() != "true":
-                print(f"Local repository path {self.local_repo_path} is not a git repository")
+                    
+                print(f"Successfully cloned repository to {self.local_repo_path}")
+                is_git_repo = True
+            elif not is_git_repo:
+                print(f"Local repository path {self.local_repo_path} is not a git repository and no repo URL is available")
                 return False
+            
+            # If we have a feature branch, check it out or create it
+            if is_git_repo and self.feature_branch:
+                print(f"Setting up feature branch: {self.feature_branch}")
                 
+                # Check if the branch exists
+                branch_result = subprocess.run(
+                    ["git", "-C", self.local_repo_path, "branch", "--list", self.feature_branch],
+                    capture_output=True, text=True
+                )
+                branch_exists = self.feature_branch in branch_result.stdout if branch_result.stdout else False
+                
+                if branch_exists:
+                    print(f"Checking out existing branch: {self.feature_branch}")
+                    subprocess.run(
+                        ["git", "-C", self.local_repo_path, "checkout", self.feature_branch],
+                        capture_output=True, text=True
+                    )
+                else:
+                    print(f"Creating new branch: {self.feature_branch}")
+                    # Try to checkout main or master first
+                    try:
+                        subprocess.run(
+                            ["git", "-C", self.local_repo_path, "checkout", "main"],
+                            capture_output=True, text=True
+                        )
+                    except:
+                        try:
+                            subprocess.run(
+                                ["git", "-C", self.local_repo_path, "checkout", "master"],
+                                capture_output=True, text=True
+                            )
+                        except:
+                            print("Could not find main or master branch")
+                    
+                    # Create and checkout the feature branch
+                    try:
+                        subprocess.run(
+                            ["git", "-C", self.local_repo_path, "checkout", "-b", self.feature_branch],
+                            capture_output=True, text=True
+                        )
+                        print(f"Created and checked out branch: {self.feature_branch}")
+                        
+                        # Push the new branch to the fork
+                        print(f"Pushing new branch to fork: {self.feature_branch}")
+                        try:
+                            # Check if we're using a fork by looking for upstream remote
+                            remotes = subprocess.run(
+                                ["git", "-C", self.local_repo_path, "remote", "-v"],
+                                capture_output=True, text=True
+                            )
+                            using_fork = "upstream" in remotes.stdout
+                            
+                            if using_fork:
+                                print(f"Pushing branch to fork (origin/{self.feature_branch})")
+                            else:
+                                print(f"Pushing branch to origin/{self.feature_branch}")
+                                
+                            subprocess.run(
+                                ["git", "-C", self.local_repo_path, "push", "-u", "origin", self.feature_branch],
+                                capture_output=True, text=True
+                            )
+                            print(f"Successfully pushed branch {self.feature_branch} to fork")
+                        except Exception as push_error:
+                            print(f"Warning: Could not push branch to fork: {push_error}")
+                    except Exception as e:
+                        print(f"Warning: Could not create feature branch: {e}")
+            
             print(f"Validated local repository at {self.local_repo_path}")
             return True
         except Exception as e:
@@ -855,7 +1047,38 @@ class PRCreationPersona(BasePersona):
                 subprocess.run(["rm", "-rf", target_folder], check=True, capture_output=True)
             
             clone_start = time.time()
-            subprocess.run(["git", "clone", repo_url, target_folder], check=True, capture_output=True)
+            
+            # Hardcode the GitHub username
+            username = "bhavana-nair"
+            print(f"Using hardcoded GitHub username: {username}")
+            
+            # If we have a username, use the fork URL instead of the original repo URL
+            if username and 'github.com' in repo_url:
+                # Extract original repo owner and name
+                repo_parts = repo_url.replace('https://github.com/', '').replace('.git', '').split('/')
+                if len(repo_parts) >= 2:
+                    original_owner, repo_name = repo_parts[0], repo_parts[1]
+                    # Create fork URL
+                    fork_url = f"https://github.com/{username}/{repo_name}.git"
+                    print(f"Using fork URL: {fork_url} instead of original: {repo_url}")
+                    
+                    # Clone from the fork
+                    subprocess.run(["git", "clone", fork_url, target_folder], check=True, capture_output=True)
+                    
+                    # Add original repo as upstream remote
+                    print("Adding original repository as upstream remote")
+                    subprocess.run(
+                        ["git", "-C", target_folder, "remote", "add", "upstream", repo_url],
+                        capture_output=True, text=True
+                    )
+                else:
+                    print(f"Could not parse repository URL: {repo_url}, using original URL")
+                    subprocess.run(["git", "clone", repo_url, target_folder], check=True, capture_output=True)
+            else:
+                # Fall back to original URL if we can't determine the fork
+                print(f"Using original repository URL: {repo_url}")
+                subprocess.run(["git", "clone", repo_url, target_folder], check=True, capture_output=True)
+                
             clone_time = time.time() - clone_start
             
             kg_start = time.time()

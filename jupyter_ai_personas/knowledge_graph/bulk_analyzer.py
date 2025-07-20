@@ -93,11 +93,9 @@ class BulkCodeAnalyzer:
     def _analyze_file(self, file_path, session):
         # Validate and normalize file path
         file_path = os.path.abspath(os.path.normpath(file_path))
-        base_dir = os.path.abspath(os.getcwd())
         
-        # Prevent directory traversal
-        if not file_path.startswith(base_dir):
-            raise ValueError('File path must be within current working directory')
+        # No longer restricting to current working directory
+        # This allows analyzing files from any location
             
         if not os.path.exists(file_path):
             raise FileNotFoundError(f'File not found: {file_path}')
@@ -175,12 +173,9 @@ class BulkCodeAnalyzer:
         try:
             # Validate and normalize file path
             file_path = os.path.abspath(os.path.normpath(file_path))
-            base_dir = os.path.abspath(os.getcwd())
             
-            # Security: Prevent directory traversal
-            if not file_path.startswith(base_dir):
-                logger.error(f'Path traversal attempt blocked: {file_path}')
-                raise ValueError('File path must be within current working directory')
+            # No longer restricting to current working directory
+            # This allows analyzing files from any location
                 
             if not os.path.exists(file_path):
                 logger.error(f'File not found: {file_path}')

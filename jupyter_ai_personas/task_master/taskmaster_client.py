@@ -243,15 +243,75 @@ class TaskMasterClient:
     def update_task_status(self, task_id: str, status: str) -> bool:
         """Update task status using TaskMaster."""
         try:
+            # Run TaskMaster command to update status with the correct format
+            work_dir = os.getcwd()
             result = subprocess.run([
                 'npx', 'task-master', 'set-status',
-                f'--to-{status}',
-                '--id', task_id
-            ], cwd=self.project_root, capture_output=True, text=True)
+                f'--status={status}',  # Correct format: --status=done
+                f'--id={task_id}'      # Correct format: --id=129
+            ], cwd=work_dir, capture_output=True, text=True)
+            
+            print(f"TaskMaster set-status result: {result.returncode}")
+            if result.returncode != 0:
+                print(f"Error output: {result.stderr}")
+                print(f"Standard output: {result.stdout}")
+            else:
+                print(f"Successfully updated task {task_id} status to {status}")
+            
+            # Also update the status in our local tasks list
+            for task in self.tasks:
+                if task.id == task_id:
+                    task.status = status
+                    break
+            
+            # Directly update the tasks.json file as a backup method
+            self._update_tasks_json_directly(task_id, status)
+            
+            # Reload tasks to ensure we have the latest data
+            self._load_tasks()
             
             return result.returncode == 0
         except Exception as e:
             print(f"Error updating task status: {e}")
+            # Try direct update as fallback
+            return self._update_tasks_json_directly(task_id, status)
+            
+    def _update_tasks_json_directly(self, task_id: str, status: str) -> bool:
+        """Directly update the task status in the tasks.json file."""
+        try:
+            # Find the tasks.json file
+            work_dir = os.getcwd()
+            tasks_path = os.path.join(work_dir, ".taskmaster", "tasks", "tasks.json")
+            
+            if not os.path.exists(tasks_path):
+                print(f"Tasks file not found at {tasks_path}")
+                return False
+                
+            # Read the current content
+            with open(tasks_path, 'r') as f:
+                data = json.load(f)
+                
+            # Update the task status
+            updated = False
+            if 'master' in data and 'tasks' in data['master']:
+                for task in data['master']['tasks']:
+                    if str(task.get('id', '')) == str(task_id):
+                        task['status'] = status
+                        updated = True
+                        break
+            
+            # Write the updated content back
+            if updated:
+                with open(tasks_path, 'w') as f:
+                    json.dump(data, f, indent=2)
+                print(f"Directly updated task {task_id} status to {status} in {tasks_path}")
+                return True
+            else:
+                print(f"Task {task_id} not found in {tasks_path}")
+                return False
+                
+        except Exception as e:
+            print(f"Error directly updating tasks.json: {e}")
             return False
     
     def get_task_by_id(self, task_id: str) -> Optional[Task]:
