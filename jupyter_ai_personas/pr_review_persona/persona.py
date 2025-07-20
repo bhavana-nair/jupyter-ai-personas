@@ -142,7 +142,17 @@ class PRReviewPersona(BasePersona):
             ]
         )
 
-        documentation_checker = Agent(name="documentation_checker",
+    def _create_documentation_agent(self, model_id: str) -> Agent:
+        """Create the documentation review agent.
+        
+        Args:
+            model_id (str): The AWS Bedrock model ID to use
+            
+        Returns:
+            Agent: Configured documentation review agent
+        """
+        return Agent(
+            name="documentation_checker",
             role="Documentation Specialist",
             model=AwsBedrock(
                 id=model_id,
