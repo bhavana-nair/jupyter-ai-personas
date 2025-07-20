@@ -169,14 +169,40 @@ class TaskExecutionAgent:
                             print(f"Pushing changes to fork (origin/{feature_branch})")
                         else:
                             print(f"Pushing changes to origin/{feature_branch}")
-                            
+                        
+                        # First try to get more detailed error information
+                        print("Checking git status before push...")
                         subprocess.run(
-                            ["git", "-C", local_repo_path, "push", "-u", "origin", feature_branch],
-                            check=True, capture_output=True
+                            ["git", "-C", local_repo_path, "status"],
+                            capture_output=False
                         )
-                        print(f"Changes pushed to remote branch {feature_branch}")
+                        
+                        # Try pushing with verbose output
+                        push_result = subprocess.run(
+                            ["git", "-C", local_repo_path, "push", "-v", "-u", "origin", feature_branch],
+                            capture_output=True, text=True
+                        )
+                        
+                        if push_result.returncode == 0:
+                            print(f"Changes pushed to remote branch {feature_branch}")
+                        else:
+                            print(f"Push failed with error code {push_result.returncode}")
+                            print(f"Error output: {push_result.stderr}")
+                            print(f"Standard output: {push_result.stdout}")
+                            
+                            # Try to diagnose the issue
+                            print("\nAttempting to diagnose push failure...")
+                            print("\nChecking remote URLs:")
+                            subprocess.run(
+                                ["git", "-C", local_repo_path, "remote", "-v"],
+                                capture_output=False
+                            )
+                            
+                            # Continue with task completion even if push fails
+                            print("\nContinuing with task completion despite push failure")
                     except Exception as e:
                         print(f"Warning: Could not push changes: {e}")
+                        print("\nContinuing with task completion despite push failure")
                 else:
                     print("No changes to commit")
             except Exception as e:
@@ -322,13 +348,29 @@ class TaskExecutionAgent:
                         # Push the new branch to the fork
                         print(f"Pushing new branch to fork: {feature_branch}")
                         try:
+                            # Check remote configuration
+                            print("Checking remote configuration:")
                             subprocess.run(
-                                ["git", "-C", local_repo_path, "push", "-u", "origin", feature_branch],
-                                check=True, capture_output=True
+                                ["git", "-C", local_repo_path, "remote", "-v"],
+                                capture_output=False
                             )
-                            print(f"Successfully pushed branch {feature_branch} to fork")
+                            
+                            # Try pushing with verbose output
+                            push_result = subprocess.run(
+                                ["git", "-C", local_repo_path, "push", "-v", "-u", "origin", feature_branch],
+                                capture_output=True, text=True
+                            )
+                            
+                            if push_result.returncode == 0:
+                                print(f"Successfully pushed branch {feature_branch} to fork")
+                            else:
+                                print(f"Push failed with error code {push_result.returncode}")
+                                print(f"Error output: {push_result.stderr}")
+                                print(f"Standard output: {push_result.stdout}")
+                                print("\nContinuing with branch setup despite push failure")
                         except Exception as push_error:
                             print(f"Warning: Could not push branch to fork: {push_error}")
+                            print("Continuing with branch setup despite push failure")
                 except subprocess.CalledProcessError as e:
                     print(f"Error with branch operations: {e}")
             
