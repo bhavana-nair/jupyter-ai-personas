@@ -44,7 +44,52 @@ class PRReviewPersona(BasePersona):
         )
     
 
-    def initialize_team(self, system_prompt):
+    def initialize_team(self, system_prompt: str) -> Team:
+        """Initialize and configure the PR review team with specialized agents.
+        
+        Args:
+            system_prompt (str): The system prompt containing chat history and context
+            
+        Returns:
+            Team: Configured team of specialized agents for PR review
+            
+        Raises:
+            ValueError: If GitHub token is not set or invalid
+            RuntimeError: If team initialization fails
+        """
+        try:
+            model_id = self.config.lm_provider_params["model_id"]
+            github_token = self._validate_github_token()
+            
+            team_members = [
+                self._create_code_quality_agent(model_id),
+                self._create_documentation_agent(model_id),
+                self._create_security_agent(model_id),
+                self._create_github_agent(model_id)
+            ]
+            
+            return self._create_review_team(model_id, team_members, system_prompt)
+            
+        except Exception as e:
+            logger.error(f"Failed to initialize PR review team: {str(e)}")
+            raise RuntimeError(f"Team initialization failed: {str(e)}")
+            
+    def _validate_github_token(self) -> str:
+        """Validate the GitHub access token.
+        
+        Returns:
+            str: Validated GitHub token
+            
+        Raises:
+            ValueError: If token is not set or invalid
+        """
+        github_token = os.getenv("GITHUB_ACCESS_TOKEN")
+        if not github_token:
+            raise ValueError(
+                "GITHUB_ACCESS_TOKEN environment variable is not set. "
+                "Please set it with a plain GitHub personal access token."
+            )
+        return github_token
         model_id = self.config.lm_provider_params["model_id"]
         github_token = os.getenv("GITHUB_ACCESS_TOKEN")
         if not github_token:
