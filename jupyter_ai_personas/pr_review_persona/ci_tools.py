@@ -89,24 +89,20 @@ class CITools(Toolkit):
 
         for run in runs:
             if run.head_sha == pr_data.head.sha:
-                print("check1")
-                print(repo_name)
-                print(run.id)
-
+                logger.debug(f"Processing workflow run {run.id} for repo {repo_name}")
                 jobs = run.jobs()
 
                 for job in jobs:
                     if job.conclusion == "failure":
-                        print("check2")
-                        print(f"Found failed job: {job.name}")
-
+                        logger.info(f"Found failed job: {job.name} (ID: {job.raw_data['id']})")
+                        
                         job_id = job.raw_data["id"]
                         
-
                         headers = {
                             "Accept": "application/vnd.github+json",
                             "Authorization": f"Bearer {self.github_token}",
-                            "X-GitHub-Api-Version": "2022-11-28"
+                            "X-GitHub-Api-Version": "2022-11-28",
+                            "User-Agent": "PRReviewPersona/1.0"
                         }
                         log_url = f"https://api.github.com/repos/{repo_name}/actions/jobs/{job_id}/logs"
                         log_response = requests.get(log_url, headers=headers)
