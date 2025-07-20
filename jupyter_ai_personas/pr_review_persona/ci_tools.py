@@ -48,18 +48,28 @@ class CITools(Toolkit):
             
         return token
 
-    async def fetch_ci_failure_data(self, agent: Agent,  repo_url: str, pr_number: int) -> list:
+    async def fetch_ci_failure_data(self, agent: Agent, repo_url: str, pr_number: int) -> List[Dict[str, str]]:
         """
         Fetch CI Failure data from GitHub API and store it in the agent's session state.
         
         Args:
             agent (Agent): The agent instance to store logs in session state
-            repo_url (str): URL of the GitHub repository
-            pr_number (int): Pull request number
+            repo_url (str): URL of the GitHub repository, must be in format 'github.com/owner/repo'
+            pr_number (int): Pull request number, must be positive
             
         Returns:
-            list: List of failure data containing job name, id and log information
+            List[Dict[str, str]]: List of failure data containing job name, id and log information
+            
+        Raises:
+            ValueError: If repo_url format is invalid or pr_number is not positive
+            RuntimeError: If GitHub API calls fail or rate limit is exceeded
         """
+        # Validate inputs
+        if not isinstance(pr_number, int) or pr_number <= 0:
+            raise ValueError("pr_number must be a positive integer")
+            
+        if not self.github_token:
+            raise RuntimeError("GitHub token is not set or invalid")
         match = None
         if "github.com" in repo_url:
             match = re.search(r"github\.com/([^/]+)/([^/]+)", repo_url)
