@@ -227,10 +227,21 @@ class PRReviewPersona(BasePersona):
         )
 
 
-        pr_review_team = Team(
+    def _create_review_team(self, model_id: str, members: List[Agent], system_prompt: str) -> Team:
+        """Create the PR review team with the specified members.
+        
+        Args:
+            model_id (str): The AWS Bedrock model ID to use
+            members (List[Agent]): List of specialized agents for the team
+            system_prompt (str): System prompt containing context and history
+            
+        Returns:
+            Team: Configured PR review team
+        """
+        return Team(
             name="pr-review-team",
             mode="coordinate",
-            members=[code_quality, documentation_checker, security_checker, gitHub],
+            members=members,
             model=AwsBedrock(
                 id=model_id,
                 session=session
