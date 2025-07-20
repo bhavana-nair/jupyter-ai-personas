@@ -285,7 +285,17 @@ class PRReviewPersona(BasePersona):
 
         return pr_review_team
 
-    async def process_message(self, message: Message):
+    async def process_message(self, message: Message) -> None:
+        """Process an incoming message and generate a PR review response.
+        
+        Args:
+            message (Message): The incoming chat message to process
+            
+        Raises:
+            ValueError: If configuration or input is invalid
+            boto3.exceptions.Boto3Error: If AWS API calls fail
+            Exception: For other unexpected errors
+        """
         provider_name = self.config.lm_provider.name
         model_id = self.config.lm_provider_params["model_id"]
 
