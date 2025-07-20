@@ -105,11 +105,20 @@ class CITools(Toolkit):
                             "User-Agent": "PRReviewPersona/1.0"
                         }
                         log_url = f"https://api.github.com/repos/{repo_name}/actions/jobs/{job_id}/logs"
-                        log_response = requests.get(log_url, headers=headers)
-                        
-                        if log_response.status_code != 200:
-                            raise Exception(f"Failed to fetch logs: {log_response.status_code} {log_response.text} from {log_url}")
-                        log_content = log_response.text
+                        try:
+                            log_response = rate_limited_request(log_url, headers)
+                            
+                            if log_response.status_code == 404:
+                                logger.warning(f"Log not found for job {job_id}")
+                                continue
+                            elif log_response.status_code != 200:
+                                raise RuntimeError(f"Failed to fetch logs: {log_response.status_code} {log_response.text} from {log_url}")
+                                
+                            log_content = log_response.text
+                            
+                        except requests.exceptions.RequestException as e:
+                            logger.error(f"Network error fetching logs: {str(e)}")
+                            continue
 
                         ##If seeing ThrottlingException in test aws account uncomment these lines [81-87] and line  92 AND comment line 93
 
