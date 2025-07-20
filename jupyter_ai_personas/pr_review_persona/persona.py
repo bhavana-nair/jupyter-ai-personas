@@ -15,9 +15,23 @@ from .template import PRPersonaVariables, PR_PROMPT_TEMPLATE
 
 session = boto3.Session()
 
-class PRReviewPersona(BasePersona):
+from typing import List, Dict, Optional, Any
+from agno.models.base import BaseModel
 
-    def __init__(self, *args, **kwargs):
+class PRReviewPersona(BasePersona):
+    """PR Review Persona for analyzing and providing feedback on GitHub pull requests.
+    
+    This persona coordinates a team of specialized agents to perform comprehensive
+    code review, security analysis, and documentation checks on pull requests.
+    """
+    
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        """Initialize the PR Review Persona.
+        
+        Args:
+            *args: Variable length argument list passed to BasePersona
+            **kwargs: Arbitrary keyword arguments passed to BasePersona
+        """
         super().__init__(*args, **kwargs)
 
     @property
