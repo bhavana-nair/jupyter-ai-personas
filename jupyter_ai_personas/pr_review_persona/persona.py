@@ -196,7 +196,17 @@ class PRReviewPersona(BasePersona):
             markdown=True
         )
 
-        gitHub = Agent(name="github",
+    def _create_github_agent(self, model_id: str) -> Agent:
+        """Create the GitHub operations agent.
+        
+        Args:
+            model_id (str): The AWS Bedrock model ID to use
+            
+        Returns:
+            Agent: Configured GitHub operations agent
+        """
+        return Agent(
+            name="github",
             role="GitHub Specialist",
             model=AwsBedrock(
                 id=model_id,
