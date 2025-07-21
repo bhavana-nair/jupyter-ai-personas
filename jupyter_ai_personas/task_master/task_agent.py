@@ -2,12 +2,25 @@
 
 import os
 import subprocess
+import sys
 from agno.agent import Agent
 from agno.models.aws import AwsBedrock
 from agno.tools.shell import ShellTools
 from agno.tools.file import FileTools
 from agno.tools.python import PythonTools
 from .taskmaster_client import TaskMasterClient, Task
+
+# Add path for repo structure tools
+sys.path.append('../pr_creation_persona')
+try:
+    from jupyter_ai_personas.pr_creation_persona.repo_structure_tools import RepoStructureTools
+except ImportError:
+    # Fallback path for direct imports
+    try:
+        from ..pr_creation_persona.repo_structure_tools import RepoStructureTools
+    except ImportError:
+        print("Warning: Could not import RepoStructureTools")
+        RepoStructureTools = None
 
 
 class TaskExecutionAgent:
@@ -52,7 +65,8 @@ class TaskExecutionAgent:
             tools=[
                 ShellTools(),
                 FileTools(),
-                PythonTools()
+                PythonTools(),
+                RepoStructureTools() if RepoStructureTools else None
             ]
         )
     
@@ -101,7 +115,9 @@ class TaskExecutionAgent:
         
         IMPORTANT INSTRUCTIONS:
         - Save all files to: {local_repo_path}
-        - Create all implementation files in the root of the repository
+        - NEVER create files in the repository root
+        - Follow project structure conventions and place files in appropriate directories
+        - Create parent directories if they don't exist before creating files
         - Use the feature branch: {feature_branch or 'main'}
         - After implementing the code, commit your changes with a descriptive message
         - Include the task ID in your commit message
@@ -115,14 +131,52 @@ class TaskExecutionAgent:
             # Set FileTools base path
             self.agent.tools[1].base_path = local_repo_path
             
+            # Analyze repository structure if RepoStructureTools is available
+            structure_info = ""
+            if RepoStructureTools and os.path.exists(local_repo_path):
+                try:
+                    print("\nAnalyzing repository structure before task execution...")
+                    structure_tools = RepoStructureTools()
+                    
+                    # Analyze folder structure
+                    structure_analysis = structure_tools.analyze_folder_structure(None, local_repo_path)
+                    
+                    # Get component placement map
+                    placement_map = structure_tools.get_component_placement_map(None, local_repo_path)
+                    
+                    # Analyze project templates
+                    template_analysis = structure_tools.analyze_project_templates(None, local_repo_path)
+                    
+                    # Add structure information to prompt
+                    structure_info = "\n\nREPOSITORY STRUCTURE ANALYSIS:\n"
+                    structure_info += "Component Placement Guidelines:\n"
+                    
+                    # Extract component placement guidelines from placement map
+                    for line in placement_map.split('\n'):
+                        if line.startswith('- ') and ': ' in line:
+                            structure_info += f"{line}\n"
+                    
+                    # Add template information
+                    structure_info += "\nProject Templates:\n"
+                    template_lines = template_analysis.split('\n')
+                    for line in template_lines[:10]:  # Limit to first 10 lines
+                        structure_info += f"{line}\n"
+                    
+                    print("Repository structure analysis complete")
+                except Exception as e:
+                    print(f"Warning: Error analyzing repository structure: {e}")
+            
             # Add explicit instructions about the path
             prompt += f"""
             
             CRITICAL PATH INSTRUCTIONS:
             - You MUST save all files to: {local_repo_path}
             - Use absolute paths when creating files
-            - Example: {local_repo_path}/compressed_log_handler.py
-            - DO NOT save files to the default directory
+            - NEVER create files directly in the repository root
+            - Follow the project structure patterns identified below
+            - Create parent directories if they don't exist before creating files
+            - Validate file paths against project conventions
+            {structure_info}
             """
         else:
             print("Warning: No local repository path specified. Files will be saved to the current directory.")
@@ -391,3 +445,62 @@ class TaskExecutionAgent:
     def mark_task_in_progress(self, task_id: str) -> bool:
         """Mark a task as in progress in TaskMaster."""
         return self.taskmaster_client.update_task_status(task_id, 'in-progress')
+        
+    def validate_file_path(self, file_path: str, repo_path: str) -> tuple[bool, str]:
+        """Validate if a file path follows project conventions.
+        
+        Args:
+            file_path: Path to validate
+            repo_path: Path to the repository root
+            
+        Returns:
+            tuple: (is_valid, message)
+        """
+        if not RepoStructureTools:
+            # If RepoStructureTools is not available, consider all paths valid
+            return True, "Path validation skipped: RepoStructureTools not available"
+            
+        try:
+            # Create RepoStructureTools instance
+            structure_tools = RepoStructureTools()
+            
+            # Validate the path
+            validation_result = structure_tools.validate_file_path(None, file_path, repo_path)
+            
+            # Check if path is directly in root
+            if validation_result.startswith("WARNING:"):
+                return False, validation_result
+            elif validation_result.startswith("VALID:"):
+                return True, validation_result
+            else:
+                # Path doesn't match known patterns, but might still be valid
+                return True, validation_result
+                
+        except Exception as e:
+            # If validation fails, consider the path valid to avoid blocking
+            return True, f"Path validation error: {str(e)}"
+            
+    def ensure_parent_directories(self, file_path: str) -> bool:
+        """Ensure parent directories exist before file creation.
+        
+        Args:
+            file_path: Path to the file to be created
+            
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        try:
+            # Get parent directory
+            parent_dir = os.path.dirname(file_path)
+            
+            # Check if parent directory exists
+            if not os.path.exists(parent_dir):
+                # Create parent directories
+                os.makedirs(parent_dir, exist_ok=True)
+                print(f"Created parent directories for: {file_path}")
+                
+            return True
+            
+        except Exception as e:
+            print(f"Error creating parent directories: {str(e)}")
+            return False

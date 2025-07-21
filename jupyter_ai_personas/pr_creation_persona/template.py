@@ -28,6 +28,8 @@ Architecture Design:
 Code Implementation:
 - Write minimal, focused code that addresses the issue
 - Follow existing code patterns and conventions
+- Place files in appropriate directories following project structure
+- Never create files directly in the repository root
 - Implement proper error handling
 - Ensure code quality and maintainability
 

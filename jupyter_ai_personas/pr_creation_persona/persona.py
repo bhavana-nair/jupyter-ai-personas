@@ -11,11 +11,13 @@ import boto3
 from agno.tools.github import GithubTools
 from agno.tools.reasoning import ReasoningTools
 from agno.tools.file import FileTools
+from .enhanced_file_tools import EnhancedFileTools
 from agno.tools.shell import ShellTools
 from langchain_core.messages import HumanMessage
 from agno.tools.python import PythonTools
 from agno.team.team import Team
 from .template import PRCreationPersonaVariables, PR_CREATION_PROMPT_TEMPLATE
+from .repo_structure_tools import RepoStructureTools
 import sys
 sys.path.append('../knowledge_graph')
 from jupyter_ai_personas.knowledge_graph.bulk_analyzer import BulkCodeAnalyzer
@@ -38,6 +40,7 @@ class PRCreationPersona(BasePersona):
         self.current_issue_url = None
         self.local_repo_path = os.getenv("LOCAL_REPO_PATH", None)
         self.feature_branch = None
+        self.folder_map = {}  # Maps component types to appropriate folders
 
     @property
     def defaults(self):
@@ -47,6 +50,50 @@ class PRCreationPersona(BasePersona):
             description="A specialized assistant for analyzing issues and implementing code fixes with automated git operations.",
             system_prompt="You are a PR creation assistant that analyzes issues, designs solutions, and implements fixes with proper git workflow.",
         )
+        
+    def analyze_repository_structure(self, repo_path):
+        """Analyze repository structure and create folder map for component placement."""
+        if not repo_path or not os.path.exists(repo_path):
+            print(f"Repository path does not exist: {repo_path}")
+            return
+            
+        try:
+            # Create RepoStructureTools instance
+            structure_tools = RepoStructureTools()
+            
+            # Analyze folder structure
+            print("Analyzing repository folder structure...")
+            structure_analysis = structure_tools.analyze_folder_structure(None, repo_path)
+            print(structure_analysis)
+            
+            # Get component placement map
+            print("\nGenerating component placement map...")
+            placement_map = structure_tools.get_component_placement_map(None, repo_path)
+            print(placement_map)
+            
+            # Analyze project templates
+            print("\nAnalyzing project templates...")
+            template_analysis = structure_tools.analyze_project_templates(None, repo_path)
+            print(template_analysis)
+            
+            # Parse the placement map to update the folder_map attribute
+            for line in placement_map.split('\n'):
+                if ': ' in line and line.startswith('- '):
+                    comp_type, folder = line.replace('- ', '').split(': ', 1)
+                    self.folder_map[comp_type.strip()] = folder.strip()
+                    
+            print(f"\nFolder map updated: {self.folder_map}")
+            
+            return {
+                "structure_analysis": structure_analysis,
+                "placement_map": placement_map,
+                "template_analysis": template_analysis,
+                "folder_map": self.folder_map
+            }
+            
+        except Exception as e:
+            print(f"Error analyzing repository structure: {str(e)}")
+            return None
 
     def initialize_team(self, system_prompt):
         model_id = self.config_manager.lm_provider_params["model_id"]
@@ -101,21 +148,32 @@ class PRCreationPersona(BasePersona):
                 "   - Define interfaces and contracts",
                 "   - Consider existing patterns and conventions",
                 
-                "STEP 2 - Implementation Strategy:",
+                "STEP 2 - Repository Structure Analysis:",
+                "   - Analyze existing folder structure patterns",
+                "   - Identify where similar components are typically placed",
+                "   - Create a folder map to guide file placement decisions",
+                "   - Determine appropriate locations for new files",
+                
+                "STEP 3 - Implementation Strategy:",
                 "   - Break down into implementable components",
                 "   - Define clear separation of concerns",
                 "   - Plan error handling and edge cases",
                 "   - Consider performance implications",
+                "   - SPECIFY EXACT FILE PATHS for all new/modified files",
                 
-                "STEP 3 - Integration Planning:",
+                "STEP 4 - Integration Planning:",
                 "   - Plan how new code integrates with existing",
                 "   - Identify required imports and dependencies",
                 "   - Consider backward compatibility",
                 "   - Plan testing approach",
                 
-                "OUTPUT: Detailed implementation plan with file-by-file changes"
+                "OUTPUT: Detailed implementation plan with file-by-file changes and EXACT file paths"
             ],
-            tools=[RepoAnalysisTools(), ReasoningTools(add_instructions=True, think=True, analyze=True)]
+            tools=[
+                RepoAnalysisTools(), 
+                RepoStructureTools(),
+                ReasoningTools(add_instructions=True, think=True, analyze=True)
+            ]
         )
 
         # Code Implementation Agent
@@ -136,28 +194,38 @@ class PRCreationPersona(BasePersona):
                 "   - If not exists: git checkout -b <branch_name> from main/master",
                 "   - Verify current codebase state",
                 
-                "STEP 2 - Code Implementation:",
+                "STEP 2 - Repository Structure Analysis:",
+                "   - Analyze existing folder structure patterns",
+                "   - Identify where similar components are typically placed",
+                "   - Create a folder map to guide file placement decisions",
+                "   - Determine appropriate locations for new files",
+                
+                "STEP 3 - Code Implementation:",
                 "   - Write MINIMAL code that addresses the issue",
                 "   - Follow existing code patterns and style",
                 "   - Implement proper error handling",
                 "   - Focus ONLY on the specific issue requirements",
                 
-                "STEP 3 - File Operations:",
+                "STEP 4 - File Operations:",
                 "   - Create/modify files using FileTools",
-                "   - Ensure proper file organization",
-                "   - Maintain code consistency",
+                "   - NEVER create files in the repository root",
+                "   - Always follow project structure conventions",
+                "   - Ensure parent directories exist before file creation",
+                "   - Validate file paths against project patterns",
                 
                 "CRITICAL REQUIREMENTS:",
                 "- Write ONLY the minimal code needed",
                 "- Follow existing patterns exactly",
+                "- Place files in appropriate directories",
                 "- NO verbose implementations",
                 "- Focus on the specific issue only"
             ],
             tools=[
                 ShellTools(),
-                FileTools(),
+                EnhancedFileTools(),
                 PythonTools(),
                 RepoAnalysisTools(),
+                RepoStructureTools(),
                 ReasoningTools(add_instructions=True, think=True, analyze=True)
             ]
         )
@@ -204,6 +272,18 @@ class PRCreationPersona(BasePersona):
             ]
         )
 
+        # Configure EnhancedFileTools with repository structure information
+        if self.local_repo_path and os.path.exists(self.local_repo_path):
+            # Get the EnhancedFileTools instance from code_implementer
+            for tool in code_implementer.tools:
+                if isinstance(tool, EnhancedFileTools):
+                    # Set repository path
+                    tool.set_repo_path(self.local_repo_path)
+                    # Set structure tools
+                    tool.set_structure_tools(RepoStructureTools())
+                    print(f"Configured EnhancedFileTools with repository path: {self.local_repo_path}")
+                    break
+        
         # Create the coordinating team
         pr_creation_team = Team(
             name="pr-creation-team",

@@ -4,8 +4,21 @@ import os
 import json
 import tempfile
 import subprocess
+import sys
 from typing import List, Dict, Any, Optional
 from dataclasses import dataclass
+
+# Add path for repo structure tools
+sys.path.append('../pr_creation_persona')
+try:
+    from jupyter_ai_personas.pr_creation_persona.repo_structure_tools import RepoStructureTools
+except ImportError:
+    # Fallback path for direct imports
+    try:
+        from ..pr_creation_persona.repo_structure_tools import RepoStructureTools
+    except ImportError:
+        print("Warning: Could not import RepoStructureTools")
+        RepoStructureTools = None
 
 
 @dataclass
@@ -207,12 +220,13 @@ class TaskMasterClient:
         
         return available
     
-    def format_tasks_for_agents(self, tasks: List[Task], show_details: bool = False) -> str:
+    def format_tasks_for_agents(self, tasks: List[Task], show_details: bool = False, repo_path: str = None) -> str:
         """Format tasks for agent consumption.
         
         Args:
             tasks: List of tasks to format
             show_details: Whether to show implementation details and test strategy
+            repo_path: Optional repository path for file path suggestions
         """
         if not tasks:
             return "No tasks available."
@@ -230,6 +244,18 @@ class TaskMasterClient:
                 if task.dependencies:
                     formatted += f"Dependencies: {', '.join(task.dependencies)}\n"
                 
+                # Add file path suggestions if repo_path is provided
+                if repo_path and RepoStructureTools and show_details:
+                    # Check if task details already include file path suggestions
+                    if task.details and not "SUGGESTED FILE PATHS:" in task.details:
+                        file_path_suggestions = self._generate_file_path_suggestions(task, repo_path)
+                        if file_path_suggestions:
+                            # Update task details with file path suggestions
+                            if task.details:
+                                task.details += "\n\n" + file_path_suggestions
+                            else:
+                                task.details = file_path_suggestions
+                
                 if task.details:
                     formatted += f"Implementation Details:\n{task.details}\n"
                 
@@ -239,6 +265,82 @@ class TaskMasterClient:
             formatted += "\n"
         
         return formatted
+        
+    def _generate_file_path_suggestions(self, task: Task, repo_path: str) -> str:
+        """Generate file path suggestions for a task based on repository structure.
+        
+        Args:
+            task: The task to generate suggestions for
+            repo_path: Path to the repository root
+            
+        Returns:
+            str: File path suggestions formatted as markdown
+        """
+        import re
+        
+        if not RepoStructureTools or not os.path.exists(repo_path):
+            return ""
+            
+        try:
+            # Extract potential file names from task description and details
+            potential_files = []
+            
+            # Look for Python class or file mentions in description
+            if task.description:
+                class_matches = re.findall(r'class\s+([A-Za-z0-9_]+)', task.description)
+                file_matches = re.findall(r'([A-Za-z0-9_]+\.py)', task.description)
+                potential_files.extend(class_matches)
+                potential_files.extend(file_matches)
+            
+            # Look for Python class or file mentions in details
+            if task.details:
+                class_matches = re.findall(r'class\s+([A-Za-z0-9_]+)', task.details)
+                file_matches = re.findall(r'([A-Za-z0-9_]+\.py)', task.details)
+                potential_files.extend(class_matches)
+                potential_files.extend(file_matches)
+            
+            # Convert class names to potential file names if needed
+            for i, name in enumerate(potential_files):
+                if not name.endswith('.py'):
+                    potential_files[i] = f"{name.lower()}.py"
+            
+            # Remove duplicates
+            potential_files = list(set(potential_files))
+            
+            if not potential_files:
+                return ""
+                
+            # Create RepoStructureTools instance
+            structure_tools = RepoStructureTools()
+            
+            # Generate path suggestions
+            file_path_suggestions = "SUGGESTED FILE PATHS:\n"
+            
+            for file_name in potential_files[:3]:  # Limit to first 3 files
+                # Determine component type from filename
+                component_type = 'utils'  # Default
+                if 'test' in file_name.lower():
+                    component_type = 'tests'
+                elif 'model' in file_name.lower():
+                    component_type = 'models'
+                elif 'view' in file_name.lower():
+                    component_type = 'views'
+                elif 'controller' in file_name.lower():
+                    component_type = 'controllers'
+                elif 'service' in file_name.lower():
+                    component_type = 'services'
+                elif 'persona' in file_name.lower():
+                    component_type = 'personas'
+                
+                # Get suggested path
+                suggested_path = structure_tools.suggest_file_path(None, file_name, component_type, repo_path)
+                file_path_suggestions += f"- {file_name}: {suggested_path}\n"
+            
+            return file_path_suggestions
+            
+        except Exception as e:
+            print(f"Error generating file path suggestions: {str(e)}")
+            return ""
     
     def update_task_status(self, task_id: str, status: str) -> bool:
         """Update task status using TaskMaster."""
@@ -329,4 +431,53 @@ class TaskMasterClient:
         
         # Format with full details
         return self.format_tasks_for_agents([task], show_details=True)
+        
+    def analyze_repository_structure(self, repo_path: str) -> Dict[str, Any]:
+        """Analyze repository structure and create folder map for component placement.
+        
+        Args:
+            repo_path: Path to the repository root
+            
+        Returns:
+            Dict with structure analysis results
+        """
+        if not RepoStructureTools or not repo_path or not os.path.exists(repo_path):
+            print(f"Cannot analyze repository structure: RepoStructureTools not available or invalid path")
+            return {}
+            
+        try:
+            # Create RepoStructureTools instance
+            structure_tools = RepoStructureTools()
+            
+            # Analyze folder structure
+            print("Analyzing repository folder structure...")
+            structure_analysis = structure_tools.analyze_folder_structure(None, repo_path)
+            
+            # Get component placement map
+            print("\nGenerating component placement map...")
+            placement_map = structure_tools.get_component_placement_map(None, repo_path)
+            
+            # Analyze project templates
+            print("\nAnalyzing project templates...")
+            template_analysis = structure_tools.analyze_project_templates(None, repo_path)
+            
+            # Parse the placement map to create folder_map
+            folder_map = {}
+            for line in placement_map.split('\n'):
+                if ': ' in line and line.startswith('- '):
+                    comp_type, folder = line.replace('- ', '').split(': ', 1)
+                    folder_map[comp_type.strip()] = folder.strip()
+                    
+            print(f"\nFolder map created: {folder_map}")
+            
+            return {
+                "structure_analysis": structure_analysis,
+                "placement_map": placement_map,
+                "template_analysis": template_analysis,
+                "folder_map": folder_map
+            }
+            
+        except Exception as e:
+            print(f"Error analyzing repository structure: {str(e)}")
+            return {}
   
