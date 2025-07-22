@@ -57,10 +57,45 @@ PROMPT_TEMPLATE = ChatPromptTemplate.from_messages(
 class EmojiPersona(BasePersona):
     """
     The Emoji persona, responds to your queries with emojis.
+    
+    Validates configuration and handles initialization errors appropriately.
+    Sets up logging and manages resources safely.
+    
+    Args:
+        *args: Arguments to pass to parent class
+        **kwargs: Keyword arguments to pass to parent class
+        
+    Raises:
+        ValueError: If required configuration is missing or invalid
     """
 
     def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+        try:
+            super().__init__(*args, **kwargs)
+            
+            # Validate required configuration
+            if not self.config:
+                raise ValueError("Configuration is required")
+                
+            if not hasattr(self.config, 'lm_provider'):
+                raise ValueError("LM provider configuration is missing")
+                
+            if not hasattr(self.config.lm_provider, 'name') or not self.config.lm_provider.name:
+                raise ValueError("LM provider name is missing")
+                
+            if not hasattr(self.config, 'lm_provider_params') or not self.config.lm_provider_params:
+                raise ValueError("LM provider parameters are missing")
+                
+            if 'model_id' not in self.config.lm_provider_params:
+                raise ValueError("model_id is required in LM provider parameters")
+                
+            logger.info(f"Initialized {self.name} with provider {self.config.lm_provider.name}")
+            
+        except Exception as e:
+            logger.error(f"Failed to initialize {self.__class__.__name__}: {str(e)}")
+            # Clean up any resources if needed
+            self._cleanup()
+            raise
     
 
     @property
