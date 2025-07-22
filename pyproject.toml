@@ -68,7 +68,19 @@ pr_fix = [
     "pytest>=7.0.0",
     "pytest-asyncio>=0.21.0"
     ]
-all = ["jupyter-ai-personas[finance,emoji,software_team,pr_review,pr_fix]"]
+[project.optional-dependencies.dev]
+test = [
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-cov>=4.1.0",
+    "pytest-xdist>=3.3.0",
+    "pytest-benchmark>=4.0.0",
+    "black>=23.0.0",
+    "isort>=5.12.0",
+    "mypy>=1.5.0"
+]
+
+all = ["jupyter-ai-personas[finance,emoji,software_team,pr_review,pr_fix,dev]"]
 
 
 [build-system]
