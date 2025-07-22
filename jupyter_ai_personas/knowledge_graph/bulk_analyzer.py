@@ -297,14 +297,34 @@ class BulkCodeAnalyzer:
                 caller=caller_name, called=called_func, file=file_path
             )
     
-    def _get_embedding(self, text):
-        """Generate embedding using AWS Bedrock Titan model"""
+    def _get_embedding(self, text: str) -> Optional[list]:
+        """Generate embedding using AWS Bedrock Titan model.
+
+        Uses AWS Bedrock service to create semantic embeddings for text content.
+        Useful for semantic similarity search and content analysis.
+
+        Args:
+            text (str): Text content to generate embedding for
+
+        Returns:
+            Optional[list]: Embedding vector if successful, None if failed
+
+        Example:
+            >>> code = "def hello(): print('world')"
+            >>> embedding = analyzer._get_embedding(code)
+            >>> if embedding:
+            ...     print(f"Got {len(embedding)}-dimensional embedding")
+        """
         try:
+            if not self.bedrock_client:
+                return None
+
             response = self.bedrock_client.invoke_model(
                 modelId=self.embd_id,
                 body=json.dumps({"inputText": text})
             )
-            return json.loads(response['body'].read())['embedding']
+            embedding = json.loads(response['body'].read())['embedding']
+            return embedding
         except Exception as e:
             print(f"Error generating embedding: {e}")
             return None
