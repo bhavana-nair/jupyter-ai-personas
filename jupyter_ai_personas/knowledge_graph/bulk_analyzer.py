@@ -120,7 +120,19 @@ class BulkCodeAnalyzer:
                 except Exception as e:
                     print(f"Error analyzing {file_path}: {e}")
     
-    def _analyze_file(self, file_path, session):
+    def _analyze_file(self, file_path: str, session) -> None:
+        """Parse and analyze a Python source file.
+        
+        Uses tree-sitter to parse the file and extract code elements.
+
+        Args:
+            file_path (str): Path to the Python file to analyze
+            session: Neo4j database session
+            
+        Example:
+            >>> with analyzer.db_connection() as session:
+            ...     analyzer._analyze_file("my_code.py", session)
+        """
         with open(file_path, 'r', encoding='utf-8') as f:
             code = f.read()
         
