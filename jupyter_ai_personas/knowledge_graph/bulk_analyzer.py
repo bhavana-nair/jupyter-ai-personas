@@ -72,16 +72,33 @@ class BulkCodeAnalyzer:
         with conn as session:
             yield session
     
-    def analyze_folder(self, folder_path, clear_existing=False):
-        """Analyze all supported files in a folder and add to knowledge graph"""
+    def analyze_folder(self, folder_path: str, clear_existing: bool = False) -> None:
+        """Analyze all supported files in a folder and add to knowledge graph.
+
+        Walks through a directory tree and processes supported files to extract code
+        elements and their relationships. Currently supports Python files.
+
+        Args:
+            folder_path (str): Path to the folder containing source code
+            clear_existing (bool, optional): Whether to clear existing graph data. Defaults to False.
+
+        Example:
+            >>> analyzer = BulkCodeAnalyzer(uri, auth)
+            >>> # Clear graph and analyze project
+            >>> analyzer.analyze_folder("my_project", clear_existing=True)
+            >>> # Add more files without clearing
+            >>> analyzer.analyze_folder("another_project")   
+        """
+        # Clear existing graph if requested
         if clear_existing:
-            with self.driver.session() as session:
+            with self.db_connection() as session:
                 session.run("MATCH (n) DETACH DELETE n")
                 print("Cleared existing graph")
         
         # Supported file extensions
-        supported_extensions = {'.py'}      #for 1st phase just py
+        supported_extensions = {'.py'}  # Phase 1: Python files only
         
+        # Find all supported files
         all_files = []
         for root, dirs, files in os.walk(folder_path):
             for file in files:
@@ -91,7 +108,8 @@ class BulkCodeAnalyzer:
         
         print(f"Found {len(all_files)} supported files")
         
-        with self.driver.session() as session:
+        # Process each file with safe database connection handling
+        with self.db_connection() as session:
             for file_path in all_files:
                 print(f"Analyzing: {file_path}")
                 try:
