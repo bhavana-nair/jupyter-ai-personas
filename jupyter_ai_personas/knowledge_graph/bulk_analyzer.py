@@ -5,15 +5,72 @@ from neo4j import GraphDatabase
 import hashlib
 import boto3
 import json
+from contextlib import contextmanager
+from typing import Optional
+
+class Neo4jConnection:
+    """Context manager for Neo4j database connections.
+
+    Usage:
+        analyzer = BulkCodeAnalyzer(uri, auth)
+        with analyzer.db_connection() as session:
+            session.run("MATCH (n) RETURN n")
+    """
+    def __init__(self, driver):
+        self.driver = driver
+
+    def __enter__(self):
+        self.session = self.driver.session()
+        return self.session
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if self.session:
+            self.session.close()
 
 class BulkCodeAnalyzer:
-    def __init__(self, uri, auth, embd_name=None, embd_id=None):
+    """Analyzes Python source code and builds a knowledge graph in Neo4j.
+
+    This class parses Python source files using tree-sitter, extracts code elements 
+    like classes and functions, and stores their relationships in a Neo4j graph database.
+    Optionally generates embeddings using AWS Bedrock for semantic analysis.
+
+    Args:
+        uri (str): Neo4j database URI
+        auth (tuple): Neo4j authentication tuple (username, password)
+        embd_name (str, optional): Name of the embedding service (e.g. "Bedrock")
+        embd_id (str, optional): Model ID for embeddings (e.g. "amazon.titan-embed-text-v1")
+
+    Example:
+        >>> analyzer = BulkCodeAnalyzer(
+        ...     "neo4j://localhost:7687",
+        ...     ("neo4j", "password"),
+        ...     embd_name="Bedrock",
+        ...     embd_id="amazon.titan-embed-text-v1"
+        ... )
+        >>> analyzer.analyze_folder("path/to/code")
+    """
+    def __init__(self, uri, auth, embd_name: Optional[str] = None, embd_id: Optional[str] = None):
         self.driver = GraphDatabase.driver(uri, auth=auth)
         self.PY_LANGUAGE = Language(tspython.language())
         self.parser = Parser(self.PY_LANGUAGE)
         self.embd_name = embd_name  # Bedrock
         self.embd_id = embd_id  # amazon.titan-embed-text-v1
         self.bedrock_client = boto3.client('bedrock-runtime') if embd_name else None
+
+    @contextmanager
+    def db_connection(self):
+        """Context manager for Neo4j database sessions.
+
+        Yields:
+            neo4j.Session: Database session that will be automatically closed
+
+        Example:
+            >>> with analyzer.db_connection() as session:
+            ...     session.run("MATCH (n) RETURN n")
+        """
+        conn = Neo4jConnection(self.driver)
+        with conn as session:
+            yield session
     
     def analyze_folder(self, folder_path, clear_existing=False):
         """Analyze all supported files in a folder and add to knowledge graph"""
