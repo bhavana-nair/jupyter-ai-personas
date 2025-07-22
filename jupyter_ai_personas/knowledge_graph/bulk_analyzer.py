@@ -202,33 +202,53 @@ class BulkCodeAnalyzer:
             for child in node.children:
                 self._extract_code_elements(child, session, file_path, current_class)
     
-    def _analyze_non_python_file(self, file_path, session):
-        """Analyze non-Python files (basic content indexing)"""
+    def _analyze_non_python_file(self, file_path: str, session) -> None:
+        """Analyze non-Python files with basic content indexing.
+
+        Creates File nodes in the graph with basic metadata and content preview.
+        Optionally generates embeddings for semantic analysis.
+
+        Args:
+            file_path (str): Path to the file to analyze
+            session: Neo4j database session
+
+        Note:
+            - Stores only first 5000 characters of content
+            - Files that can't be read still get nodes with error info
+
+        Example:
+            >>> with analyzer.db_connection() as session:
+            ...     analyzer._analyze_non_python_file("README.md", session)
+        """
         try:
             with open(file_path, 'r', encoding='utf-8') as f:
                 content = f.read()
             
             # Create a File node for non-Python files
-            embedding = self._get_embedding(content[:5000]) if self.bedrock_client else None
+            # Only use first 5000 chars to avoid overloading db
+            content_preview = content[:5000]
+            embedding = self._get_embedding(content_preview) if self.bedrock_client else None
             
-            session.run(
-                "MERGE (f:File {path: $path}) SET f.content = $content, f.size = $size, f.type = $type, f.embedding = $embedding",
-                path=file_path, 
-                content=content[:5000],
-                size=len(content),
-                type=os.path.splitext(file_path)[1],
-                embedding=embedding
-            )
+            with self.db_connection() as session:
+                session.run(
+                    "MERGE (f:File {path: $path}) SET f.content = $content, f.size = $size, f.type = $type, f.embedding = $embedding",
+                    path=file_path, 
+                    content=content_preview,
+                    size=len(content),
+                    type=os.path.splitext(file_path)[1],
+                    embedding=embedding
+                )
             
         except Exception as e:
             print(f"Error reading {file_path}: {e}")
-            # Create File node without content
-            session.run(
-                "MERGE (f:File {path: $path}) SET f.error = $error, f.type = $type",
-                path=file_path,
-                error=str(e),
-                type=os.path.splitext(file_path)[1]
-            )
+            # Create File node without content but with error info
+            with self.db_connection() as session:
+                session.run(
+                    "MERGE (f:File {path: $path}) SET f.error = $error, f.type = $type",
+                    path=file_path,
+                    error=str(e),
+                    type=os.path.splitext(file_path)[1]
+                )
     
     def _extract_function_calls(self, func_node, session, caller_name, file_path):
         """Extract function calls from a function body"""
