@@ -139,7 +139,23 @@ class BulkCodeAnalyzer:
         tree = self.parser.parse(bytes(code, 'utf8'))
         self._extract_code_elements(tree.root_node, session, file_path)
     
-    def _extract_code_elements(self, node, session, file_path, current_class=None):
+    def _extract_code_elements(self, node, session, file_path: str, current_class: Optional[str] = None) -> None:
+        """Recursively extract code elements from an AST node.
+
+        Processes class definitions, function definitions, and their relationships.
+        Builds graph nodes and relationships for code structure analysis.
+
+        Args:
+            node: tree-sitter AST node
+            session: Neo4j database session
+            file_path (str): Source file path
+            current_class (str, optional): Name of current class being processed
+
+        Example:
+            >>> tree = parser.parse(bytes(code, 'utf8'))
+            >>> with analyzer.db_connection() as session:
+            ...     analyzer._extract_code_elements(tree.root_node, session, "code.py")
+        """
         if node.type == 'class_definition':
             class_name = node.child_by_field_name("name").text.decode('utf8')
             class_code = node.text.decode('utf8', errors='ignore')
