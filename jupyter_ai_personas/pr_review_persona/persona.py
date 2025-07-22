@@ -1,22 +1,138 @@
+"""PR Review Persona for analyzing and providing feedback on GitHub pull requests."""
+
 import os
-from jupyter_ai.personas.base_persona import BasePersona, PersonaDefaults
-from jupyterlab_chat.models import Message
-from jupyter_ai.history import YChatHistory
+import logging
+from typing import List, Dict, Optional, Any, AsyncIterator, cast
+from dataclasses import dataclass
+from enum import Enum
+
+import boto3
 from agno.agent import Agent
 from agno.models.aws import AwsBedrock
-import boto3
+from agno.models.base import BaseModel
 from agno.tools.github import GithubTools
 from agno.tools.reasoning import ReasoningTools
-from langchain_core.messages import HumanMessage
 from agno.tools.python import PythonTools
 from agno.team.team import Team
+from langchain_core.messages import HumanMessage
+
+from jupyter_ai.personas.base_persona import BasePersona, PersonaDefaults
+from jupyter_ai.history import YChatHistory
+from jupyterlab_chat.models import Message
+
 from .ci_tools import CITools
 from .template import PRPersonaVariables, PR_PROMPT_TEMPLATE
 
-session = boto3.Session()
+# Configure logging
+logger = logging.getLogger(__name__)
 
-from typing import List, Dict, Optional, Any
-from agno.models.base import BaseModel
+class PRReviewError(Exception):
+    """Base exception for PR review errors."""
+    pass
+
+class ConfigurationError(PRReviewError):
+    """Error raised when configuration is invalid or missing."""
+    pass
+
+class GitHubError(PRReviewError):
+    """Error raised for GitHub API related issues."""
+    pass
+
+class AgentType(Enum):
+    """Types of agents in the PR review team."""
+    CODE_QUALITY = "code_quality"
+    DOCUMENTATION = "documentation"
+    SECURITY = "security" 
+    GITHUB = "github"
+
+@dataclass
+class AgentConfig:
+    """Configuration for a team agent."""
+    name: str
+    role: str
+    instructions: List[str]
+    tools: List[Any]
+    markdown: bool = True
+
+# Agent configurations
+AGENT_CONFIGS = {
+    AgentType.CODE_QUALITY: AgentConfig(
+        name="code_quality",
+        role="Code Quality Analyst",
+        instructions=[
+            "You have access to CITools for analyzing CI failures. Always:",
+            "1. Get repository and PR information:",
+            "   - Extract repo URL and PR number from the request",
+            "   - Use GithubTools to fetch PR details",
+            "2. Check CI failures using CITools:",
+            "   - Call fetch_ci_failure_data with repo_url and pr_number",
+            "   - Use get_ci_logs to analyze any failures found",
+            "   - If failures exist, analyze error messages and logs",
+            "3. Review code quality:",
+            "   - Code style and consistency",
+            "   - Code smells and anti-patterns", 
+            "   - Complexity and readability",
+            "   - Performance implications",
+            "   - Error handling and edge cases",
+            "Always include CI analysis in your response, whether failures are found or not.",
+        ],
+        tools=[
+            PythonTools(),
+            GithubTools(
+                get_pull_requests=True,
+                get_pull_request_changes=True,
+                create_pull_request_comment=True
+            ),
+            CITools(),
+            ReasoningTools(add_instructions=True, think=True, analyze=True)
+        ]
+    ),
+    AgentType.DOCUMENTATION: AgentConfig(
+        name="documentation_checker",
+        role="Documentation Specialist",
+        instructions=[
+            "Review documentation completeness and quality:",
+            "1. Verify docstrings for new/modified functions and classes",
+            "2. Check README updates for new features or changes",
+            "3. Verify return value documentation",
+            "4. Check for documentation consistency",
+        ],
+        tools=[PythonTools()]
+    ),
+    AgentType.SECURITY: AgentConfig(
+        name="security_checker",
+        role="Security Analyst",
+        instructions=[
+            "Perform security analysis of code changes:",
+            "1. Check for exposed sensitive information (API keys, tokens, credentials)",
+            "2. Identify potential SQL injection vulnerabilities",
+            "3. Verify proper input sanitization",
+            "4. Check for insecure direct object references",
+        ],
+        tools=[
+            PythonTools(),
+            ReasoningTools(add_instructions=True, think=True, analyze=True)
+        ]
+    ),
+    AgentType.GITHUB: AgentConfig(
+        name="github",
+        role="GitHub Specialist", 
+        instructions=[
+            "Monitor and analyze GitHub repository activities and changes",
+            "Fetch and process pull request data",
+            "Analyze code changes and provide structured feedback",
+            "Create a comment on a specific line of a specific file in a pull request.",
+            "Note: Requires a valid GitHub personal access token in GITHUB_ACCESS_TOKEN environment variable"
+        ],
+        tools=[
+            GithubTools(
+                create_pull_request_comment=True,
+                get_pull_requests=True,
+                get_pull_request_changes=True
+            )
+        ]
+    )
+}
 
 class PRReviewPersona(BasePersona):
     """PR Review Persona for analyzing and providing feedback on GitHub pull requests.
