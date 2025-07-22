@@ -45,10 +45,23 @@ software_team = [
 
 
 pr_review = [
-    "agno",
-    "boto3",
-    "pygithub",
-    ]
+    "agno>=0.8.0",  # Core agent framework
+    "boto3>=1.28.0", # AWS SDK with Bedrock support
+    "pygithub>=2.1.0", # GitHub API
+    "langchain>=0.0.350", # LangChain core
+    "langchain-community>=0.0.10", # Community integrations
+    "botocore>=1.31.0", # AWS core
+    "typing-extensions>=4.8.0", # Enhanced typing support
+    "mypy>=1.7.0", # Static type checking
+    "ruff>=0.1.6", # Fast Python linter
+    "pytest>=7.4.0", # Testing framework
+    "pytest-asyncio>=0.21.0", # Async test support
+    "pytest-cov>=4.1.0", # Coverage reporting
+    "requests>=2.31.0", # HTTP client
+    "aiohttp>=3.9.0", # Async HTTP client
+    "types-requests>=2.31.0.0", # Type stubs for requests
+    "types-aiohttp>=3.9.0.0", # Type stubs for aiohttp
+]
 
 all = ["jupyter-ai-personas[finance,emoji,software_team,pr_review]"]
 
