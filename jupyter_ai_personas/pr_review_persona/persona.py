@@ -1,4 +1,5 @@
 import os
+import re
 import logging
 from jupyter_ai.personas.base_persona import BasePersona, PersonaDefaults
 from jupyterlab_chat.models import Message
@@ -21,7 +22,7 @@ session = boto3.Session()
 
 
 class PRReviewPersona(BasePersona):
-    # Heartbeat intervals in seconds
+    # Heartbeat intervals
     FIRST_HEARTBEAT_DELAY = 120
     SECOND_HEARTBEAT_DELAY = 180
     THIRD_HEARTBEAT_DELAY = 300
@@ -72,9 +73,9 @@ class PRReviewPersona(BasePersona):
                 "   - Use exact file paths from PR changes",
                 "   - Use line numbers from the diff",
                 "   - Do not just mention issues - CREATE the comments",
+                "   - Use the exact format: [{\"path\": \"file.py\", \"position\": 10, \"body\": \"issue description\"}]",
             ],
             tools=[
-                # PythonTools(),
                 GithubTools(
                     get_pull_requests=True,
                     get_pull_request_changes=True,
@@ -114,7 +115,6 @@ class PRReviewPersona(BasePersona):
                 "4. Check for insecure direct object references",
             ],
             tools=[
-                # PythonTools(),
                 ReasoningTools(
                     add_instructions=True,
                     think=True,
@@ -157,17 +157,22 @@ class PRReviewPersona(BasePersona):
                 "   - Review code structure and patterns",
                 "   - Check CI status and analyze any failures",
                 "   - Keep analysis focused and concise",
+                "   - Always create inline comments:",
                 "2. Documentation Specialist:",
                 "   - Review documentation completeness",
                 "   - Focus on critical documentation issues",
                 "3. Security Analyst:",
                 "   - Check for security vulnerabilities",
                 "   - Prioritize high-impact issues",
-                "4. CRITICAL - Always create inline comments:",
-                "   - MUST call create_inline_pr_comments for any issues found",
-                "   - Do not just report issues - POST them as comments",
-                "   - Use the exact format: [{\"path\": \"file.py\", \"position\": 10, \"body\": \"issue description\"}]",
-                "5. Synthesize findings:",
+                "4. GitHub Specialist:",
+                "   - FIRST ACTION: Call get_pull_request_changes() with actual repo URL and PR number",
+                "   - VERIFY: Show actual PR diff data in response",
+                "   - NEVER proceed without real GitHub data",
+                "5. CRITICAL - Code Quality Analyst handles inline comments:",
+                "   - Code Quality Analyst will create inline comments for issues",
+                "   - Other team members should report issues to Code Quality Analyst",
+                "   - Focus on identifying and reporting actionable issues",
+                "6. Synthesize findings:",
                 "   - Combine key insights from all members",
                 "   - Focus on actionable items",
                 "   - Keep responses concise",
@@ -183,7 +188,6 @@ class PRReviewPersona(BasePersona):
                     get_pull_requests=True,
                     get_pull_request_changes=True,
                 ),
-                create_inline_pr_comments,
                 ReasoningTools(add_instructions=True, think=True, analyze=True),
             ],
         )
@@ -191,6 +195,14 @@ class PRReviewPersona(BasePersona):
         return pr_review_team
 
     async def process_message(self, message: Message):
+
+        # Send initial acknowledgment message
+        pr_match = re.search(r'github\.com/([^/\s]+/[^/\s]+)/pull/(\d+)', message.body)
+        if pr_match:
+            repo_name = pr_match.group(1)
+            pr_number = pr_match.group(2)
+            self.send_message(f"Got your request. Processing PR #{pr_number} from repo: {repo_name}")
+  
         provider_name = self.config_manager.lm_provider.name
         model_id = self.config_manager.lm_provider_params["model_id"]
 

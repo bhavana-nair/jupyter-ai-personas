@@ -21,8 +21,7 @@ def fetch_ci_failures(repo_name: str, pr_number: int) -> list:
     if not github_token:
         raise ValueError("GITHUB_ACCESS_TOKEN environment variable is not set")
 
-    g = Github(github_token)
-    repo = g.get_repo(repo_name)
+    repo = Github(github_token).get_repo(repo_name)
     pr_data = repo.get_pull(pr_number)
     runs = repo.get_workflow_runs(branch=pr_data.head.ref)
     failures = []

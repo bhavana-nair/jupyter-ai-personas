@@ -1,4 +1,4 @@
-from typing import Any, Dict, List
+from typing import List,TypedDict
 from github import Github
 from github.GithubException import GithubException
 from os import getenv
@@ -8,16 +8,23 @@ import logging
 logger = logging.getLogger(__name__)
 
 
+class PRComment(TypedDict):
+    """Type definition for a PR comment."""
+    path: str  # file path
+    position: int  # Line number
+    body: str  # comment text
+
+
 @tool
 def create_inline_pr_comments(
-    repo_name: str, pr_number: int, comments: List[Dict[str, Any]]
+    repo_name: str, pr_number: int, comments: List[PRComment]
 ) -> str:
     """Create multiple inline comments on a pull request.
 
     Args:
         repo_name (str): The full name of the repository (e.g., 'owner/repo').
         pr_number (int): The number of the pull request.
-        comments (List[Dict]): List of comment objects with the following structure:
+        comments (List[PRComment]): List of comment objects with the following structure:
             [
                 {
                     "path": "path/to/file.py",  # Relative file path
@@ -36,10 +43,9 @@ def create_inline_pr_comments(
     try:
         access_token = getenv("GITHUB_ACCESS_TOKEN")
         if not access_token:
-            return "Error: GITHUB_ACCESS_TOKEN not found"
+            return "Error: GITHUB_ACCESS_TOKEN not found. Please set up the classic access token from GitHub."
 
-        g = Github(access_token)
-        repo = g.get_repo(repo_name)
+        repo = Github(access_token).get_repo(repo_name)
         pr = repo.get_pull(pr_number)
         head_repo = pr.head.repo
         commit = head_repo.get_commit(pr.head.sha)
