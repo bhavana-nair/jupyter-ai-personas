@@ -1,5 +1,6 @@
-from typing import Any, Dict, List
+from typing import List,TypedDict
 from github import Github
+from github.GithubException import GithubException
 from os import getenv
 from agno.tools import tool
 import logging
@@ -7,16 +8,23 @@ import logging
 logger = logging.getLogger(__name__)
 
 
+class PRComment(TypedDict):
+    """Type definition for a PR comment."""
+    path: str  # file path
+    position: int  # Line number
+    body: str  # comment text
+
+
 @tool
 def create_inline_pr_comments(
-    repo_name: str, pr_number: int, comments: List[Dict[str, Any]]
+    repo_name: str, pr_number: int, comments: List[PRComment]
 ) -> str:
     """Create multiple inline comments on a pull request.
 
     Args:
         repo_name (str): The full name of the repository (e.g., 'owner/repo').
         pr_number (int): The number of the pull request.
-        comments (List[Dict]): List of comment objects with the following structure:
+        comments (List[PRComment]): List of comment objects with the following structure:
             [
                 {
                     "path": "path/to/file.py",  # Relative file path
@@ -35,10 +43,9 @@ def create_inline_pr_comments(
     try:
         access_token = getenv("GITHUB_ACCESS_TOKEN")
         if not access_token:
-            return "Error: GITHUB_ACCESS_TOKEN not found"
+            return "Error: GITHUB_ACCESS_TOKEN not found. Please set up the classic access token from GitHub."
 
-        g = Github(access_token)
-        repo = g.get_repo(repo_name)
+        repo = Github(access_token).get_repo(repo_name)
         pr = repo.get_pull(pr_number)
         head_repo = pr.head.repo
         commit = head_repo.get_commit(pr.head.sha)
@@ -58,6 +65,8 @@ def create_inline_pr_comments(
         try:
             pr.create_review(body=summary, event="COMMENT")
             logger.debug("Created summary review")
+        except GithubException as e:
+            logger.warning(f"Summary creation failed: GitHub API error {e.status} - {e.data.get('message', '')}")
         except Exception as e:
             logger.warning(f"Summary creation failed: {str(e)}")
 
@@ -100,34 +109,25 @@ def create_inline_pr_comments(
                     comment_urls.append(comment.html_url)
                     logger.info(f"Comment {i + 1}: Successfully created inline comment")
                     continue
+                except GithubException as inline_error:
+                    logger.warning(
+                        f"Comment {i + 1}: GitHub API error {inline_error.status} - {inline_error.data.get('message', '')}"
+                    )
+                    error_msg = f"Comment {i + 1} failed: GitHub API error {inline_error.status}"
+                    errors.append(error_msg)
+                    logger.error(error_msg)
                 except Exception as inline_error:
                     logger.warning(
                         f"Comment {i + 1}: Inline failed: {str(inline_error)}"
                     )
-                    
-                    # Try adding comment to the first line of the file instead
-                    try:
-                        logger.debug(f"Comment {i + 1}: Attempting to add comment to first line")
-                        first_line_comment = f"[Originally for line {line_number}] {comment_data['body']}"
-                        comment = pr.create_comment(
-                            first_line_comment,
-                            commit,
-                            file_path,
-                            1,  # First line of the file
-                        )
-                        comment_urls.append(comment.html_url)
-                        logger.info(f"Comment {i + 1}: Successfully added to first line")
-                        continue
-                    except Exception as first_line_error:
-                        logger.warning(f"Comment {i + 1}: First line attempt failed: {str(first_line_error)}")
-                        
-                        # Both attempts failed
-                        error_msg = f"Comment {i + 1} failed: Original error: {str(inline_error)}; First line error: {str(first_line_error)}"
-                        errors.append(error_msg)
-                        logger.error(error_msg)
-                        
-                # This code is only reached if both attempts failed
+                    error_msg = f"Comment {i + 1} failed: {str(inline_error)}"
+                    errors.append(error_msg)
+                    logger.error(error_msg)
 
+            except GithubException as e:
+                error_msg = f"Comment {i + 1} failed: GitHub API error {e.status} - {e.data.get('message', '')}"
+                errors.append(error_msg)
+                logger.error(error_msg)
             except Exception as e:
                 error_msg = f"Comment {i + 1} failed: {str(e)}"
                 errors.append(error_msg)
@@ -141,5 +141,7 @@ def create_inline_pr_comments(
             result += f", {error_count} failed: {'; '.join(errors[:3])}"
 
         return result
+    except GithubException as e:
+        return f"GitHub API Error {e.status}: {e.data.get('message', '')}"
     except Exception as e:
         return f"Error: {str(e)}"

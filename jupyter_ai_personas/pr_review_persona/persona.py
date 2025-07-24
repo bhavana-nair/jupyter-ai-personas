@@ -1,5 +1,6 @@
 import os
 import re
+import logging
 from jupyter_ai.personas.base_persona import BasePersona, PersonaDefaults
 from jupyterlab_chat.models import Message
 from jupyter_ai.history import YChatHistory
@@ -26,6 +27,11 @@ session = boto3.Session()
 
 
 class PRReviewPersona(BasePersona):
+    # Heartbeat intervals
+    FIRST_HEARTBEAT_DELAY = 120
+    SECOND_HEARTBEAT_DELAY = 180
+    THIRD_HEARTBEAT_DELAY = 300
+    
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
@@ -39,6 +45,7 @@ class PRReviewPersona(BasePersona):
         )
 
     def initialize_team(self, system_prompt):
+        model_id = self.config_manager.lm_provider_params["model_id"]
         model_id = self.config_manager.lm_provider_params["model_id"]
         github_token = os.getenv("GITHUB_ACCESS_TOKEN")
         if not github_token:
@@ -85,11 +92,12 @@ class PRReviewPersona(BasePersona):
                 "   - Complexity and readability",
                 "   - Performance implications",
                 "   - Error handling and edge cases",
-                "6. MUST create inline comments for issues found:",
+                "4. MUST create inline comments for issues found:",
                 "   - For each code issue, IMMEDIATELY call create_inline_pr_comments",
                 "   - Use exact file paths from PR changes",
                 "   - Use line numbers from the diff",
                 "   - Do not just mention issues - CREATE the comments",
+                "   - Use the exact format: [{\"path\": \"file.py\", \"position\": 10, \"body\": \"issue description\"}]",
             ],
             tools=[
                 RepoAnalysisTools(),
@@ -100,6 +108,7 @@ class PRReviewPersona(BasePersona):
                     get_directory_content=True,
                 ),
                 fetch_ci_failures,
+                create_inline_pr_comments,
                 create_inline_pr_comments,
                 ReasoningTools(add_instructions=True, think=True, analyze=True),
             ],
@@ -116,7 +125,7 @@ class PRReviewPersona(BasePersona):
                 "3. Verify return value documentation",
                 "4. Check for documentation consistency",
             ],
-            tools=[],  # PythonTools()
+            tools=[],
             markdown=True,
         )
 
@@ -132,7 +141,6 @@ class PRReviewPersona(BasePersona):
                 "4. Check for insecure direct object references",
             ],
             tools=[
-                # PythonTools(),
                 ReasoningTools(
                     add_instructions=True,
                     think=True,
@@ -232,6 +240,9 @@ class PRReviewPersona(BasePersona):
                 "   - Check CI status and analyze any failures",
                 "   - Identify breaking changes based on KG analysis",
                 "3. Documentation Specialist:",
+                "   - Keep analysis focused and concise",
+                "   - Always create inline comments:",
+                "2. Documentation Specialist:",
                 "   - Review documentation completeness",
                 "   - Focus on critical documentation issues",
                 "4. Security Analyst:",
@@ -258,6 +269,7 @@ class PRReviewPersona(BasePersona):
             show_members_responses=True,
             enable_agentic_context=True,
             add_datetime_to_instructions=True,
+            show_tool_calls=False,
             tools=[
                 GithubTools(
                     get_pull_requests=True,
@@ -314,21 +326,26 @@ class PRReviewPersona(BasePersona):
             import threading
 
             # Flag to stop heartbeat when done
-            processing = threading.Event()
+            processing = asyncio.Event()
             processing.set()
 
             async def heartbeat():
-                await asyncio.sleep(120)
-                if processing.is_set():
-                    self.send_message("⏳ Still processing large PR...")
-                    await asyncio.sleep(180)
+                try:
+                    await asyncio.sleep(self.FIRST_HEARTBEAT_DELAY)
                     if processing.is_set():
-                        self.send_message("⏳ Almost done...")
-                        await asyncio.sleep(300)
+                        self.send_message("⏳ Still processing large PR...")
+                        await asyncio.sleep(self.SECOND_HEARTBEAT_DELAY)
                         if processing.is_set():
-                            self.send_message(
-                                "⏳ Taking longer than expected, please wait..."
-                            )
+                            self.send_message("⏳ Almost done...")
+                            await asyncio.sleep(self.THIRD_HEARTBEAT_DELAY)
+                            if processing.is_set():
+                                self.send_message(
+                                    "⏳ Taking longer than expected, please wait..."
+                                )
+                except asyncio.CancelledError:
+                    # Handle task cancellation gracefully
+                    logger.debug("Heartbeat task cancelled")
+                    raise  # Re-raise to properly terminate the task
 
             heartbeat_task = asyncio.create_task(heartbeat())
 
