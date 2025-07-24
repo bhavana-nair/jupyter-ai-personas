@@ -270,6 +270,14 @@ class PRReviewPersona(BasePersona):
         return pr_review_team
 
     async def process_message(self, message: Message):
+
+        # initial acknowledgment message
+        pr_match = re.search(r'github\.com/([^/\s]+/[^/\s]+)/pull/(\d+)', message.body)
+        if pr_match:
+            repo_name = pr_match.group(1)
+            pr_number = pr_match.group(2)
+            self.send_message(f"Got your request. Processing PR #{pr_number} from repo: {repo_name}")
+ 
         provider_name = self.config_manager.lm_provider.name
         model_id = self.config_manager.lm_provider_params["model_id"]
 
