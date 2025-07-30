@@ -10,7 +10,6 @@ import boto3
 from agno.tools.github import GithubTools
 from agno.tools.reasoning import ReasoningTools
 from langchain_core.messages import HumanMessage
-from agno.tools.python import PythonTools
 from agno.team.team import Team
 from .fetch_ci_failures import fetch_ci_failures
 from .template import PRPersonaVariables, PR_PROMPT_TEMPLATE
@@ -233,27 +232,25 @@ class PRReviewPersona(BasePersona):
 
             # Add periodic heartbeat messages during processing
             import asyncio
-            import threading
 
             # Flag to stop heartbeat when done
             processing = asyncio.Event()
             processing.set()
 
             async def heartbeat():
+                heartbeat_steps = [
+                    (self.FIRST_HEARTBEAT_DELAY, "⏳ Still processing large PR..."),
+                    (self.SECOND_HEARTBEAT_DELAY, "⏳ Almost done..."),
+                    (self.THIRD_HEARTBEAT_DELAY, "⏳ Taking longer than expected, please wait...")
+                ]
+                
                 try:
-                    await asyncio.sleep(self.FIRST_HEARTBEAT_DELAY)
-                    if processing.is_set():
-                        self.send_message("⏳ Still processing large PR...")
-                        await asyncio.sleep(self.SECOND_HEARTBEAT_DELAY)
-                        if processing.is_set():
-                            self.send_message("⏳ Almost done...")
-                            await asyncio.sleep(self.THIRD_HEARTBEAT_DELAY)
-                            if processing.is_set():
-                                self.send_message(
-                                    "⏳ Taking longer than expected, please wait..."
-                                )
+                    for delay, message in heartbeat_steps:
+                        await asyncio.sleep(delay)
+                        if not processing.is_set():
+                            break
+                        self.send_message(message)
                 except asyncio.CancelledError:
-                    # Handle task cancellation gracefully
                     logger.debug("Heartbeat task cancelled")
                     raise  # Re-raise to properly terminate the task
 
