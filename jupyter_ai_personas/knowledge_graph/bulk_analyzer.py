@@ -203,7 +203,3 @@ class BulkCodeAnalyzer:
         except Exception as e:
             print(f"Error generating embedding: {e}")
             return None
-
-
-# analyzer = BulkCodeAnalyzer("neo4j://127.0.0.1:7687", ("neo4j", "Bhavana@97"))
-# analyzer.analyze_folder("source_code", clear_existing=True)
